@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Doctor Vending — Operations</title>
+<meta name="description" content="Doctor Vending inventory, refills & profit management">
+<meta name="theme-color" content="#0B1014">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dr Vending">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Righteous&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B1014; --ink2:#0D141A; --panel:#111A21; --panel2:#0E161C; --panel3:#16222B;
+  --line:#1D2B34; --line2:#283B46;
+  --text:#E9F2F5; --muted:#7E939E; --faint:#54676F;
+  --teal:#0FACC5; --teal-b:#2BD1E8; --teal-d:#0B7E91; --teal-glass:rgba(15,172,197,.12);
+  --amber:#F5B14A; --red:#F0716B; --green:#43D9A3; --violet:#9BA8F5;
+  --r:14px; --r-s:10px;
+  --disp:'Righteous',cursive; --ui:'Space Grotesk',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--ui);background:var(--ink);color:var(--text);font-size:15px;line-height:1.5;
+  background-image:radial-gradient(circle at 1px 1px,#131E26 1.2px,transparent 0);
+  background-size:26px 26px;min-height:100vh;
+}
+::selection{background:var(--teal-d);color:#fff}
+h1,h2,h3{font-weight:600}
+a{color:var(--teal-b)}
+button{font-family:var(--ui);cursor:pointer}
+input,select,textarea{font-family:var(--ui);font-size:15px;color:var(--text);background:var(--panel2);
+  border:1px solid var(--line2);border-radius:var(--r-s);padding:9px 12px;width:100%;outline:none;min-height:42px}
+input:focus,select:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-glass)}
+input[type=date]{color-scheme:dark}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237E939E' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:0 0 5px;letter-spacing:.02em}
+:focus-visible{outline:2px solid var(--teal-b);outline-offset:2px}
+svg{display:block}
+
+/* ---------- coin signature ---------- */
+.coin{display:inline-block;width:.42em;height:.42em;border-radius:50%;background:var(--teal);margin-left:.18em;vertical-align:baseline;box-shadow:0 0 12px rgba(43,209,232,.55)}
+.coin-drop{position:relative;width:64px;height:56px;margin:0 auto}
+.coin-drop::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:44px;height:5px;border-radius:3px;background:var(--teal-d)}
+.coin-drop i{position:absolute;left:50%;top:0;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--teal-b);animation:drop 1.15s cubic-bezier(.5,.05,.7,1) infinite}
+@keyframes drop{0%{transform:translateY(-4px) scale(1);opacity:0}12%{opacity:1}78%{transform:translateY(34px) scale(1,1);opacity:1}88%{transform:translateY(38px) scale(1.25,.35);opacity:.9}100%{transform:translateY(38px) scale(1.3,.2);opacity:0}}
+
+/* ---------- app grid ---------- */
+#app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+.sidebar{background:var(--ink2);border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:40}
+.brand{padding:2px 10px 18px;user-select:none}
+.brand .b1{font-family:var(--disp);color:var(--teal);font-size:17px;letter-spacing:.06em;font-style:italic}
+.brand .b2{font-family:var(--disp);font-size:26px;letter-spacing:.045em;line-height:1.05;color:#fff}
+.brand .b3{font-size:10.5px;letter-spacing:.28em;color:var(--faint);text-transform:uppercase;margin-top:4px}
+.nsec{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);padding:16px 10px 6px}
+.nv{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:0;color:var(--muted);
+  padding:9px 10px;border-radius:10px;font-size:14.5px;font-weight:500;position:relative;transition:color .15s,background .15s}
+.nv svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.nv:hover{color:var(--text);background:var(--panel)}
+.nv.on{color:#fff;background:var(--teal-glass)}
+.nv.on::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal-b);margin-left:auto;box-shadow:0 0 8px rgba(43,209,232,.7)}
+.sb-foot{margin-top:18px;padding:14px 10px 4px;border-top:1px solid var(--line)}
+
+/* ---------- topbar ---------- */
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:14px 26px;background:rgba(11,16,20,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+#pgTitle{font-family:var(--disp);font-weight:400;font-size:23px;letter-spacing:.03em}
+#pgActions{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
+#burger{display:none;background:var(--panel);border:1px solid var(--line2);border-radius:10px;width:42px;height:42px;color:var(--text);align-items:center;justify-content:center}
+#burger svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round}
+#page{padding:24px 26px 90px;max-width:1340px;width:100%;margin:0 auto}
+#scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:35}
+
+/* ---------- components ---------- */
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.card h3{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h3 .sp{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500;font-size:12.5px;color:var(--faint)}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--kc,var(--teal));opacity:.9}
+.kpi .kl{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kpi .kv{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin-top:6px;line-height:1.15}
+.kpi .ks{font-size:12.5px;color:var(--faint);margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--teal);color:#04252c;border:1px solid transparent;
+  font-weight:600;font-size:14px;border-radius:var(--r-s);padding:9.5px 16px;min-height:42px;transition:filter .15s,transform .1s}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.55;cursor:default;filter:none}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn.ghost{background:var(--panel);border-color:var(--line2);color:var(--text)}
+.btn.ghost:hover{border-color:var(--teal);color:var(--teal-b);filter:none}
+.btn.danger{background:transparent;border-color:rgba(240,113,107,.4);color:var(--red)}
+.btn.sm{padding:6px 11px;min-height:34px;font-size:13px}
+.ibtn{background:none;border:0;color:var(--muted);padding:6px;border-radius:8px;display:inline-flex}
+.ibtn svg{width:16.5px;height:16.5px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ibtn:hover{color:var(--teal-b);background:var(--teal-glass)}
+.ibtn.del:hover{color:var(--red);background:rgba(240,113,107,.1)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-ok{background:rgba(67,217,163,.12);color:var(--green)}
+.p-low{background:rgba(245,177,74,.13);color:var(--amber)}
+.p-out{background:rgba(240,113,107,.13);color:var(--red)}
+.p-teal{background:var(--teal-glass);color:var(--teal-b)}
+.p-gray{background:rgba(126,147,158,.14);color:var(--muted)}
+.p-vio{background:rgba(155,168,245,.13);color:var(--violet)}
+.tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.t-warn{background:rgba(245,177,74,.15);color:var(--amber)}
+.t-bad{background:rgba(240,113,107,.16);color:var(--red)}
+
+/* tables */
+.twrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+table.tbl{width:100%;border-collapse:collapse;min-width:640px}
+.tbl th{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;
+  text-align:left;padding:11px 14px;border-bottom:1px solid var(--line2);background:var(--panel3);position:sticky;top:0;white-space:nowrap}
+.tbl td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr:hover{background:rgba(15,172,197,.045)}
+.tbl .r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.tbl .num{font-variant-numeric:tabular-nums}
+.tbl .mut{color:var(--muted);font-size:13px}
+.tbl .bold{font-weight:600}
+.tfoot td{background:var(--panel3);font-weight:700;border-top:1px solid var(--line2)}
+
+/* filter bar */
+.fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}
+.fbar>div{min-width:140px;flex:0 1 auto}
+.fbar input,.fbar select{min-height:40px;padding:7px 11px;font-size:14px}
+.fbar .grow{flex:1 1 190px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);cursor:pointer;padding:9px 0;user-select:none}
+.chk input{width:16px;height:16px;min-height:0;accent-color:var(--teal)}
+
+/* modal */
+#modal{display:none;position:fixed;inset:0;z-index:60;background:rgba(4,8,10,.7);backdrop-filter:blur(4px);overflow-y:auto;padding:4vh 14px 8vh}
+#modal.open{display:block}
+#modalCard{background:var(--panel);border:1px solid var(--line2);border-radius:16px;max-width:560px;margin:0 auto;
+  box-shadow:0 24px 70px rgba(0,0,0,.55);animation:pop .18s ease-out}
+#modalCard.wide{max-width:820px}
+@keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 0}
+.mhead h2{font-family:var(--disp);font-weight:400;font-size:19px;letter-spacing:.03em}
+#modalBody{padding:18px 22px 6px}
+.mfoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px 20px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:13px}
+.frow.f3{grid-template-columns:1fr 1fr 1fr}
+.f1{margin-bottom:13px}
+.mnote{font-size:12.5px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:13px}
+.line{display:grid;gap:9px;align-items:end;margin-bottom:10px;padding:11px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+.line .hint{font-size:11.5px;color:var(--faint);margin-top:3px;min-height:14px}
+.line .hint b{color:var(--teal-b)}
+.rm{align-self:end}
+
+/* toast */
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;width:min(430px,92vw)}
+.toast{background:var(--panel3);border:1px solid var(--line2);border-left:3px solid var(--teal);border-radius:11px;
+  padding:11px 15px;font-size:14px;box-shadow:0 10px 34px rgba(0,0,0,.5);animation:pop .2s ease-out}
+.toast.err{border-left-color:var(--red)}
+.toast.ok{border-left-color:var(--green)}
+
+/* charts */
+.chart-scroll{overflow-x:auto}
+svg.chart{width:100%;max-width:640px;height:auto}
+svg.chart text{font-family:var(--ui);fill:var(--muted)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.hb{margin-bottom:11px}
+.hb-top{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:5px}
+.hb-top b{font-variant-numeric:tabular-nums}
+.hb-track{height:9px;border-radius:6px;background:var(--panel3);overflow:hidden}
+.hb-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--teal-d),var(--teal-b));min-width:3px}
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+
+/* activity */
+.act{display:flex;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line);font-size:13.5px;align-items:flex-start}
+.act:last-child{border-bottom:0}
+.act .dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none}
+.act .when{margin-left:auto;color:var(--faint);font-size:12px;white-space:nowrap}
+
+/* empty state */
+.empty{padding:42px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line2);border-radius:12px;background:var(--panel2)}
+.empty p{margin-bottom:14px;font-size:14.5px}
+
+/* auth */
+#auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-card{background:#fff;color:#101418;border-radius:20px;padding:36px 34px 30px;width:min(410px,94vw);box-shadow:0 30px 90px rgba(0,0,0,.6)}
+.auth-card img{width:210px;margin:0 auto 6px;display:block}
+.auth-card .coin-drop{margin-bottom:14px}
+.auth-card .coin-drop::after{background:#d8e6ea}
+.auth-card label{color:#5b6b73}
+.auth-card input{background:#f2f6f8;border-color:#dbe5e9;color:#101418}
+.auth-card input:focus{border-color:var(--teal)}
+.auth-card .btn{width:100%;justify-content:center;margin-top:6px}
+.auth-sub{text-align:center;color:#7a8a92;font-size:13px;margin:-2px 0 20px;letter-spacing:.18em;text-transform:uppercase}
+#loginErr{display:none;background:#fdecec;color:#b3423c;border-radius:9px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
+#setupNote{display:none;font-size:14px;color:#334;line-height:1.65}
+#setupNote code{background:#eef4f6;padding:1px 6px;border-radius:5px;font-size:12.5px}
+#setupNote ol{padding-left:20px;margin-top:8px}
+
+#splash{display:none;position:fixed;inset:0;background:var(--ink);z-index:70;align-items:center;justify-content:center;flex-direction:column;gap:18px}
+#splash .st{font-family:var(--disp);letter-spacing:.1em;color:var(--muted);font-size:14px}
+
+.mut{color:var(--muted)}
+.pos{color:var(--green)}.neg{color:var(--red)}.warn{color:var(--amber)}
+.mb{margin-bottom:16px}
+.sec-title{font-family:var(--disp);font-weight:400;font-size:17px;letter-spacing:.04em;margin:26px 0 13px}
+
+@media(max-width:1120px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:960px){
+  #app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:262px;transform:translateX(-104%);transition:transform .22s ease;box-shadow:24px 0 60px rgba(0,0,0,.45)}
+  .sidebar.open{transform:none}
+  #burger{display:inline-flex}
+  #scrim.on{display:block}
+  .topbar{padding:12px 16px}
+  #page{padding:18px 14px 90px}
+}
+@media(max-width:620px){
+  .g4,.g3,.g2{grid-template-columns:1fr}
+  .kpi .kv{font-size:23px}
+  .frow,.frow.f3{grid-template-columns:1fr}
+  #pgTitle{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
+</style>
+</head>
+<body>
+<style>
+.pl-line{grid-template-columns:2.2fr .7fr .9fr 1.1fr auto}
+.rf-line{grid-template-columns:2.4fr .7fr .9fr auto}
+.tr-line{grid-template-columns:2.6fr .8fr auto}
+@media(max-width:640px){.pl-line,.rf-line,.tr-line{grid-template-columns:1fr 1fr}.line .full{grid-column:1/-1}}
+</style>
+
+<div id="auth">
+  <div class="auth-card">
+    <img src="./logo.png" alt="Doctor Vending — vending made easy">
+    <div class="auth-sub">Operations Console</div>
+    <div class="coin-drop" aria-hidden="true"><i></i></div>
+    <div id="loginErr" role="alert"></div>
+    <form id="loginForm" onsubmit="doLogin(event)">
+      <div class="f1"><label for="lEmail">Email</label><input id="lEmail" type="email" required autocomplete="username"></div>
+      <div class="f1"><label for="lPass">Password</label><input id="lPass" type="password" required autocomplete="current-password"></div>
+      <button class="btn" id="loginBtn" type="submit">Sign in</button>
+    </form>
+    <div id="setupNote">
+      <b>One-time setup needed</b>
+      <ol>
+        <li>Create a project at <b>supabase.com</b></li>
+        <li>Run <code>schema.sql</code> in the SQL Editor</li>
+        <li>Add a user under Authentication → Users</li>
+        <li>Paste your project URL &amp; anon key into <code>CONFIG</code> at the top of <code>index.html</code></li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div id="splash"><div class="coin-drop" aria-hidden="true"><i></i></div><div class="st">LOADING STOCK…</div></div>
+
+<div id="app" style="display:none">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="b1">Doctor</div>
+      <div class="b2">VENDING<span class="coin"></span></div>
+      <div class="b3">Vending made easy</div>
+    </div>
+    <nav id="nav" aria-label="Main"></nav>
+    <div class="sb-foot">
+      <button class="nv" onclick="signOut()" id="soBtn"></button>
+      <div style="font-size:11px;color:var(--faint);padding:8px 10px 0">v1.0 · UAE · AED</div>
+    </div>
+  </aside>
+  <div id="scrim" onclick="closeDrawer()"></div>
+  <div class="main">
+    <div class="topbar">
+      <button id="burger" onclick="openDrawer()" aria-label="Open menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <h1 id="pgTitle"></h1>
+      <div id="pgActions"></div>
+    </div>
+    <main id="page"></main>
+  </div>
+</div>
+
+<div id="modal">
+  <div id="modalCard">
+    <div class="mhead"><h2 id="modalTitle"></h2>
+      <button class="ibtn" type="button" onclick="closeModal()" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <form id="modalForm" onsubmit="modalSubmit(event)" novalidate>
+      <div id="modalBody"></div>
+      <div class="mfoot">
+        <button type="button" class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn" id="modalSaveBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ================================================================
+   DOCTOR VENDING — Operations Console
+   1) Create a Supabase project  2) Run schema.sql  3) Paste keys below
+   ================================================================ */
+const CONFIG = {
+  SUPABASE_URL: "https://uedtnznhoybvdquqphnz.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZHRuem5ob3lidmRxdXFwaG56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNDg3MzEsImV4cCI6MjA5OTgyNDczMX0.rO31lK4tCZPezhI37PgRXitEh4JAQj_exXs82UzxW9k"
+};
+
+/* ---------------- state & helpers ---------------- */
+let sb = null;
+const TABLES = ['locations','categories','suppliers','products','employees','machines',
+  'purchases','batches','issues','issue_items','transfers','transfer_items','collections','adjustments'];
+const S = { page:'dashboard', c:{}, maps:{}, f:{} };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const AED = n => 'AED ' + (+n || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const NUM = n => { n = +n || 0; return n % 1 ? n.toLocaleString('en-US',{maximumFractionDigits:2}) : n.toLocaleString('en-US'); };
+const PCT = n => (isFinite(n) ? (n*100).toFixed(1) : '0.0') + '%';
+const r4 = x => Math.round((+x||0)*10000)/10000;
+const pad2 = x => String(x).padStart(2,'0');
+const todayStr = () => { const d = new Date(); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); };
+const firstOfMonth = () => todayStr().slice(0,8)+'01';
+const daysTo = d => Math.ceil((new Date(d+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/864e5);
+const fmtD = s => s ? new Date(s.slice(0,10)+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const timeAgo = ts => { const m = Math.max(1,Math.round((Date.now()-new Date(ts))/6e4));
+  if (m<60) return m+'m ago'; const h=Math.round(m/60); if(h<24) return h+'h ago'; const d=Math.round(h/24); return d+'d ago'; };
+const v = id => ($(id)?.value ?? '').trim();
+const n_ = id => +($(id)?.value || 0);
+
+/* ---------------- icons ---------------- */
+const ICO = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  box:'<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  coins:'<ellipse cx="12" cy="5.5" rx="7" ry="2.8"/><path d="M5 5.5v6c0 1.6 3.1 2.9 7 2.9s7-1.3 7-2.9v-6"/><path d="M5 11.5v6c0 1.6 3.1 2.9 7 2.9s7-1.3 7-2.9v-6"/>',
+  doc:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+  inbox:'<path d="M12 3v9"/><path d="M8 8l4 4 4-4"/><path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>',
+  truck:'<rect x="2" y="6.5" width="11" height="9" rx="1.2"/><path d="M13 9.5h4.2L20 12.5V15.5h-3"/><circle cx="6.8" cy="17.6" r="1.7"/><circle cx="16.4" cy="17.6" r="1.7"/>',
+  cash:'<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.7"/><path d="M6 10.4v.01M18 13.6v.01"/>',
+  swap:'<path d="M7 4v13"/><path d="M3.5 7.5L7 4l3.5 3.5"/><path d="M17 20V7"/><path d="M13.5 16.5L17 20l3.5-3.5"/>',
+  tag:'<path d="M20.2 12l-8.4 8.4a2 2 0 0 1-2.8 0L3 14.4V3h11.4l5.8 5.8a2.3 2.3 0 0 1 0 3.2z"/><circle cx="8" cy="8" r="1.4"/>',
+  machine:'<rect x="5" y="2.5" width="14" height="19" rx="2"/><rect x="8" y="5.8" width="4.6" height="3"/><rect x="8" y="10.6" width="4.6" height="3"/><path d="M15.8 5.8v7.8"/><path d="M8 17.6h8"/>',
+  factory:'<path d="M3 21V9.5l5.5 3.5v-3.5l5.5 3.5V4.5H21V21z"/><path d="M6.8 17.2h.01M11 17.2h.01M15.2 17.2h.01"/>',
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.4 3.9-5 7-5s5.8 1.6 7 5"/>',
+  cog:'<circle cx="12" cy="12" r="3.1"/><path d="M12 2.5v2.8M12 18.7v2.8M2.5 12h2.8M18.7 12h2.8M5.2 5.2l2 2M16.8 16.8l2 2M18.8 5.2l-2 2M7.2 16.8l-2 2"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M4 7h16"/><path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7"/><path d="M6.5 7l.9 13h9.2l.9-13"/><path d="M10 11v5.5M14 11v5.5"/>',
+  edit:'<path d="M4 20l4.2-1L20.5 6.7a2.15 2.15 0 0 0-3.2-3L5 16z"/><path d="M13.4 6.6l3.1 3.1"/>',
+  eye:'<path d="M2.5 12S6 5.6 12 5.6 21.5 12 21.5 12 18 18.4 12 18.4 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  out:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>',
+  dl:'<path d="M12 4v10"/><path d="M8 10.5l4 4 4-4"/><path d="M4.5 19.5h15"/>',
+  alert:'<path d="M12 3.2L2.6 20h18.8z"/><path d="M12 9.6v4.6M12 17.3v.01"/>'
+};
+const ic = (n, s=18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round">${ICO[n]||''}</svg>`;
+
+/* ---------------- lookups ---------------- */
+function rebuildMaps(){ S.maps = {}; for (const t of TABLES) S.maps[t] = new Map((S.c[t]||[]).map(r => [r.id, r])); }
+const rec = (t,id) => S.maps[t]?.get(id) || null;
+const nameOf = (t,id) => { const r = rec(t,id); return r ? (r.name || r.code || '—') : '—'; };
+const machLabel = id => { const m = rec('machines', id); if (!m) return '—';
+  return esc([m.code, m.name].filter(Boolean).join(' · ') + (m.site ? ' — ' + m.site : '')); };
+const activeLocs = () => (S.c.locations||[]).filter(l => l.is_active !== false);
+const activeProds = () => (S.c.products||[]).filter(p => p.is_active !== false).sort((a,b)=>a.name.localeCompare(b.name));
+
+/* ---------------- data ---------------- */
+async function loadAll(){
+  const res = await Promise.all(TABLES.map(t => sb.from(t).select('*').limit(10000)));
+  const bad = res.find(r => r.error); if (bad) throw bad.error;
+  TABLES.forEach((t,i) => S.c[t] = res[i].data || []);
+  const byDate = (a,b) => (b.date||'').localeCompare(a.date||'') || (b.created_at||'').localeCompare(a.created_at||'');
+  for (const t of ['purchases','issues','transfers','collections','adjustments']) S.c[t].sort(byDate);
+  S.c.batches.sort((a,b) => ((a.expiry_date||'9999')+'').localeCompare((b.expiry_date||'9999')+''));
+  S.c.products.sort((a,b) => a.name.localeCompare(b.name));
+  for (const t of ['suppliers','employees','locations','categories']) S.c[t].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  S.c.machines.sort((a,b) => (a.code||a.name||'').localeCompare(b.code||b.name||''));
+  rebuildMaps();
+}
+async function refresh(){ await loadAll(); PAGES[S.page](); }
+
+/* ---------------- stock math ---------------- */
+const availAt = (pid, loc) => S.c.batches.reduce((s,b) =>
+  s + (b.product_id===pid && b.location_id===loc && +b.qty_remaining>0 ? +b.qty_remaining : 0), 0);
+
+function fefoPick(pid, loc, qty, work){
+  const rem = b => work && work.has(b.id) ? work.get(b.id) : +b.qty_remaining;
+  const bs = S.c.batches
+    .filter(b => b.product_id===pid && b.location_id===loc && rem(b) > 1e-9)
+    .sort((a,b) => ((a.expiry_date||'9999-12-31')+(a.created_at||'')).localeCompare((b.expiry_date||'9999-12-31')+(b.created_at||'')));
+  let need = qty; const picks = [];
+  for (const b of bs){ if (need <= 1e-9) break;
+    const t = Math.min(need, rem(b)); picks.push({b, t}); need -= t;
+    if (work) work.set(b.id, rem(b) - t); }
+  return need > 1e-9 ? null : picks;
+}
+
+function stockBy(){ // product_id -> aggregate
+  const m = new Map();
+  for (const b of S.c.batches){
+    const q = +b.qty_remaining; if (q <= 0) continue;
+    let e = m.get(b.product_id);
+    if (!e){ e = {total:0, val:0, locs:{}, expSoon:0, expired:0}; m.set(b.product_id, e); }
+    e.total += q; e.val += q * (+b.unit_cost||0);
+    e.locs[b.location_id] = (e.locs[b.location_id]||0) + q;
+    if (b.expiry_date){ const d = daysTo(b.expiry_date); if (d < 0) e.expired += q; else if (d <= 30) e.expSoon += q; }
+  }
+  return m;
+}
+</script>
+<script>
+/* ---------------- UI framework ---------------- */
+function toast(msg, type=''){
+  const d = document.createElement('div'); d.className = 'toast '+type; d.textContent = msg;
+  $('toasts').appendChild(d); setTimeout(() => d.remove(), 4200);
+}
+let modalOnSave = null;
+function openModal(title, body, o={}){
+  $('modalTitle').innerHTML = title;
+  $('modalBody').innerHTML = body;
+  const b = $('modalSaveBtn');
+  b.textContent = o.saveLabel || 'Save';
+  b.style.display = o.onSave ? '' : 'none';
+  b.classList.toggle('danger', !!o.danger);
+  modalOnSave = o.onSave || null;
+  $('modalCard').classList.toggle('wide', !!o.wide);
+  $('modal').classList.add('open');
+  const f = $('modalBody').querySelector('input,select,textarea'); if (f) setTimeout(()=>f.focus(), 60);
+}
+function closeModal(){ $('modal').classList.remove('open'); modalOnSave = null; }
+async function modalSubmit(ev){
+  ev.preventDefault(); if (!modalOnSave){ closeModal(); return; }
+  const b = $('modalSaveBtn'), t = b.textContent; b.disabled = true; b.textContent = 'Saving…';
+  try { await modalOnSave(); } catch(e){ toast(e.message || 'Something went wrong', 'err'); }
+  b.disabled = false; b.textContent = t;
+}
+function askConfirm(msg, onYes, label='Delete'){
+  openModal('Confirm', `<p style="color:var(--muted);line-height:1.6;padding-bottom:8px">${msg}</p>`,
+    { onSave:onYes, saveLabel:label, danger:true });
+}
+
+const F = {
+  inp:(id,label,o={}) => `<div><label for="${id}">${label}</label><input id="${id}" type="${o.type||'text'}" value="${esc(o.val??'')}"${o.req?' required':''}${o.step?` step="${o.step}"`:''}${o.min!==undefined?` min="${o.min}"`:''}${o.max!==undefined?` max="${o.max}"`:''}${o.ph?` placeholder="${esc(o.ph)}"`:''}${o.type==='number'?' inputmode="decimal"':''}></div>`,
+  sel:(id,label,list,val,o={}) => `<div><label for="${id}">${label}</label><select id="${id}"${o.req?' required':''}${o.onch?` onchange="${o.onch}"`:''}>${o.noEmpty?'':`<option value="">${o.emptyLabel||'—'}</option>`}${list.map(x=>`<option value="${x[0]}"${String(x[0])===String(val)?' selected':''}>${esc(x[1])}</option>`).join('')}</select></div>`,
+  area:(id,label,val='') => `<div class="f1"><label for="${id}">${label}</label><textarea id="${id}" rows="2">${esc(val)}</textarea></div>`
+};
+const LISTS = {
+  locs:  () => activeLocs().map(l=>[l.id, l.name]),
+  prods: () => activeProds().map(p=>[p.id, p.name]),
+  sups:  () => S.c.suppliers.map(s=>[s.id, s.name]),
+  emps:  () => S.c.employees.filter(e=>e.is_active!==false).map(e=>[e.id, e.name]),
+  machs: () => S.c.machines.map(m=>[m.id, [m.code,m.name].filter(Boolean).join(' · ') + (m.site?' — '+m.site:'')]),
+  cats:  () => S.c.categories.map(c=>[c.id, c.name])
+};
+
+function page(title, actions, body){
+  $('pgTitle').innerHTML = esc(title) + '<span class="coin"></span>';
+  $('pgActions').innerHTML = actions || '';
+  $('page').innerHTML = body;
+  document.title = title + ' — Doctor Vending';
+}
+const th = c => Array.isArray(c) ? `<th class="${c[1]}">${c[0]}</th>` : `<th>${c}</th>`;
+function tbl(cols, rows, o={}){
+  if (!rows.length) return emptyBox(o.empty || 'Nothing here yet.', o.emptyBtn || '');
+  return `<div class="twrap"><table class="tbl"><thead><tr>${cols.map(th).join('')}</tr></thead><tbody>${rows.join('')}</tbody>${o.foot?`<tbody class="tfoot">${o.foot}</tbody>`:''}</table></div>`;
+}
+const emptyBox = (text, btn='') => `<div class="empty"><p>${text}</p>${btn}</div>`;
+const addBtn = (label, fn) => `<button class="btn" onclick="${fn}">${ic('plus',15)} ${label}</button>`;
+const ghostBtn = (label, fn, icon='dl') => `<button class="btn ghost" onclick="${fn}">${ic(icon,15)} ${label}</button>`;
+const rowBtns = (...b) => `<td style="white-space:nowrap;text-align:right">${b.join('')}</td>`;
+const editIB = fn => `<button class="ibtn" onclick="${fn}" aria-label="Edit">${ic('edit',17)}</button>`;
+const viewIB = fn => `<button class="ibtn" onclick="${fn}" aria-label="View">${ic('eye',17)}</button>`;
+const delIB  = fn => `<button class="ibtn del" onclick="${fn}" aria-label="Delete">${ic('trash',17)}</button>`;
+const stPill = s => s==='out' ? '<span class="pill p-out">Out</span>' : s==='low' ? '<span class="pill p-low">Low</span>' : '<span class="pill p-ok">OK</span>';
+const kpi = (label, color, val, sub) => `<div class="kpi" style="--kc:${color}"><div class="kl">${label}</div><div class="kv">${val}</div><div class="ks">${sub||''}</div></div>`;
+
+function dlCSV(rows, name){
+  const s = rows.map(r => r.map(x => { x = String(x ?? ''); return /[",\n]/.test(x) ? '"'+x.replace(/"/g,'""')+'"' : x; }).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff'+s], {type:'text/csv;charset=utf-8'}));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------------- charts ---------------- */
+const shortAED = n => { n = +n || 0; const a = Math.abs(n);
+  if (a >= 1e6) return (n/1e6).toFixed(1)+'M'; if (a >= 1e4) return (n/1e3).toFixed(1)+'k'; return n.toFixed(0); };
+function chartBars(months){
+  const max = Math.max(1, ...months.flatMap(m => [m.a, m.b, 0]));
+  const W = months.length*74 + 10, base = 160;
+  let s = `<div class="chart-scroll"><svg class="chart" viewBox="0 0 ${W} 196" role="img" aria-label="Monthly profit chart">`;
+  months.forEach((m,i) => { const x = i*74 + 8;
+    const ah = Math.max(2, Math.max(0,m.a)/max*126), bh = Math.max(2, Math.max(0,m.b)/max*126);
+    s += `<rect x="${x+8}" y="${base-ah}" width="22" height="${ah}" rx="5" fill="#0FACC5"/>`;
+    s += `<rect x="${x+34}" y="${base-bh}" width="22" height="${bh}" rx="5" fill="#2BD1E8" opacity=".42"/>`;
+    s += `<text x="${x+32}" y="${base+11}" font-size="10.5" text-anchor="middle" fill="#54676F">${shortAED(m.a)}</text>`;
+    s += `<text x="${x+32}" y="${base+27}" font-size="11" text-anchor="middle">${m.label}</text>`;
+  });
+  s += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="#283B46"/></svg></div>`;
+  s += '<div class="legend"><span><i style="background:#0FACC5"></i>Refill profit</span><span><i style="background:#2BD1E8;opacity:.5"></i>Collections profit</span></div>';
+  return s;
+}
+function donut(items){
+  const total = items.reduce((s,i)=>s+i.v, 0);
+  if (!total) return '<div class="mut" style="font-size:13.5px">No stock value yet.</div>';
+  const C = 2*Math.PI*54; let off = 0;
+  const segs = items.map(i => { const len = Math.max(0.5, i.v/total*C);
+    const r = `<circle cx="70" cy="70" r="54" fill="none" stroke="${i.c}" stroke-width="17" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;
+    off += len; return r; }).join('');
+  return `<div class="donut-wrap"><svg width="140" height="140" viewBox="0 0 140 140">${segs}
+    <text x="70" y="64" text-anchor="middle" font-size="10.5" fill="#7E939E">STOCK</text>
+    <text x="70" y="82" text-anchor="middle" font-size="15" font-weight="700" fill="#E9F2F5">${shortAED(total)}</text></svg>
+    <div>${items.map(i=>`<div style="font-size:13px;margin:5px 0"><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${i.c};margin-right:8px"></i>${esc(i.l)} <b style="margin-left:6px">${AED(i.v)}</b></div>`).join('')}</div></div>`;
+}
+function hbars(items, fmt=AED){
+  if (!items.length) return '<div class="mut" style="font-size:13.5px">No data in this period.</div>';
+  const max = Math.max(1, ...items.map(i=>i.v));
+  return items.map(i => `<div class="hb"><div class="hb-top"><span>${esc(i.l)}</span><b>${fmt(i.v)}</b></div><div class="hb-track"><div class="hb-fill" style="width:${Math.max(2, i.v/max*100)}%"></div></div></div>`).join('');
+}
+
+/* ---------------- auth & shell ---------------- */
+function boot(){
+  $('soBtn').innerHTML = ic('out') + ' Sign out';
+  buildNav();
+  if (!/^https?:\/\//.test(CONFIG.SUPABASE_URL)){
+    $('setupNote').style.display = 'block'; $('loginForm').style.display = 'none'; return;
+  }
+  sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  sb.auth.getSession().then(({data:{session}}) => { if (session) enter(); });
+}
+async function doLogin(ev){
+  ev.preventDefault();
+  const b = $('loginBtn'); b.disabled = true; b.textContent = 'Signing in…';
+  const { error } = await sb.auth.signInWithPassword({ email: v('lEmail'), password: $('lPass').value });
+  if (error){ const e = $('loginErr'); e.textContent = error.message; e.style.display = 'block';
+    b.disabled = false; b.textContent = 'Sign in'; return; }
+  enter();
+}
+async function enter(){
+  $('auth').style.display = 'none'; $('splash').style.display = 'flex';
+  try { await loadAll(); $('app').style.display = ''; go('dashboard'); }
+  catch(e){ toast('Could not load data: ' + (e.message||e), 'err'); $('auth').style.display = 'flex'; }
+  $('splash').style.display = 'none';
+}
+async function signOut(){ if (sb) await sb.auth.signOut(); location.reload(); }
+
+const NAV = [
+  ['Overview',   [['dashboard','Dashboard','grid'], ['inventory','Inventory','box'], ['profit','Profit','coins'], ['reports','Reports','doc']]],
+  ['Operations', [['purchases','Purchases','inbox'], ['refills','Refills','truck'], ['collections','Collections','cash'], ['transfers','Transfers','swap']]],
+  ['Catalog',    [['products','Products','tag'], ['machines','Machines','machine'], ['suppliers','Suppliers','factory'], ['employees','Employees','user']]],
+  ['System',     [['settings','Settings','cog']]]
+];
+function buildNav(){
+  $('nav').innerHTML = NAV.map(([sec, items]) =>
+    `<div class="nsec">${sec}</div>` + items.map(([p, label, icon]) =>
+      `<button class="nv" data-p="${p}" onclick="go('${p}')">${ic(icon)} ${label}</button>`).join('')
+  ).join('');
+}
+function go(p){
+  S.page = p; closeDrawer();
+  document.querySelectorAll('.nv[data-p]').forEach(a => a.classList.toggle('on', a.dataset.p === p));
+  PAGES[p](); window.scrollTo(0,0);
+}
+function openDrawer(){ $('sidebar').classList.add('open'); $('scrim').classList.add('on'); }
+function closeDrawer(){ $('sidebar').classList.remove('open'); $('scrim').classList.remove('on'); }
+
+/* ---------------- dashboard ---------------- */
+function issueValue(id){
+  let rev = 0, cogs = 0;
+  for (const it of S.c.issue_items){ if (it.issue_id !== id) continue;
+    rev += it.qty * (+it.unit_price||0); cogs += it.qty * (+it.unit_cost||0); }
+  return { rev, cogs };
+}
+function monthlySeries(k=6){
+  const out = [], now = new Date();
+  for (let i = k-1; i >= 0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const key = d.getFullYear() + '-' + pad2(d.getMonth()+1);
+    let rev = 0, cogs = 0;
+    for (const it of S.c.issue_items){ const iss = S.maps.issues.get(it.issue_id);
+      if (!iss || (iss.date||'').slice(0,7) !== key) continue;
+      rev += it.qty*(+it.unit_price||0); cogs += it.qty*(+it.unit_cost||0); }
+    const coll = S.c.collections.filter(c => (c.date||'').slice(0,7) === key).reduce((s,c)=>s + +c.amount, 0);
+    out.push({ label: d.toLocaleDateString('en', {month:'short'}), a: rev-cogs, b: coll-cogs });
+  }
+  return out;
+}
+function activityFeed(){
+  const ev = [];
+  for (const p of S.c.purchases.slice(0,15)) ev.push({t:p.created_at, c:'var(--teal)',
+    txt:`Stock received${p.ref_no ? ' · '+esc(p.ref_no) : ''} from <b>${esc(nameOf('suppliers',p.supplier_id))}</b> → ${esc(nameOf('locations',p.location_id))}`});
+  for (const i of S.c.issues.slice(0,15)){ const val = issueValue(i.id);
+    ev.push({t:i.created_at, c:'var(--green)', txt:`<b>${esc(nameOf('employees',i.employee_id))}</b> refilled ${machLabel(i.machine_id)} · ${AED(val.rev)}`}); }
+  for (const c of S.c.collections.slice(0,15)) ev.push({t:c.created_at, c:'var(--violet)',
+    txt:`Collected <b>${AED(c.amount)}</b> from ${machLabel(c.machine_id)}`});
+  for (const a of S.c.adjustments.slice(0,15)) ev.push({t:a.created_at, c:'var(--red)',
+    txt:`Waste · ${NUM(a.qty)} × ${esc(nameOf('products',a.product_id))} <span class="mut">(${esc(a.reason||'')})</span>`});
+  return ev.filter(e=>e.t).sort((a,b)=>b.t.localeCompare(a.t)).slice(0,8);
+}
+function pgDashboard(){
+  const stk = stockBy();
+  let stockVal = 0, low = 0, expSoonQ = 0, expiredQ = 0;
+  for (const p of activeProds()){
+    const e = stk.get(p.id) || {total:0, val:0, expSoon:0, expired:0};
+    stockVal += e.val; expSoonQ += e.expSoon; expiredQ += e.expired;
+    if (e.total <= (+p.min_stock||0)) low++;
+  }
+  const mS = firstOfMonth();
+  let refRev = 0, refCogs = 0;
+  for (const it of S.c.issue_items){ const i = S.maps.issues.get(it.issue_id);
+    if (!i || (i.date||'') < mS) continue;
+    refRev += it.qty*(+it.unit_price||0); refCogs += it.qty*(+it.unit_cost||0); }
+  const coll = S.c.collections.filter(c => c.date >= mS).reduce((s,c)=>s + +c.amount, 0);
+  const refProfit = refRev - refCogs, collProfit = coll - refCogs;
+
+  const locVals = activeLocs().map((l,i) => ({ l: l.name,
+    v: S.c.batches.reduce((s,b)=> s + (b.location_id===l.id && +b.qty_remaining>0 ? b.qty_remaining*(+b.unit_cost||0) : 0), 0),
+    c: ['#0FACC5','#2BD1E8','#0B7E91','#9BA8F5','#43D9A3'][i%5] })).filter(x=>x.v>0);
+
+  const d30 = new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const topMap = new Map();
+  for (const it of S.c.issue_items){ const i = S.maps.issues.get(it.issue_id);
+    if (!i || (i.date||'') < d30) continue;
+    topMap.set(it.product_id, (topMap.get(it.product_id)||0) + it.qty*(+it.unit_price||0)); }
+  const top = [...topMap.entries()].map(([id,v])=>({l:nameOf('products',id), v}))
+    .sort((a,b)=>b.v-a.v).slice(0,6);
+
+  page('Dashboard', ghostBtn('New refill', "go('refills');setTimeout(newRefill,50)", 'truck'), `
+    <div class="grid g3 mb">
+      ${kpi('Stock value', 'var(--teal)', AED(stockVal), NUM(S.c.batches.filter(b=>+b.qty_remaining>0).length)+' live batches')}
+      ${kpi('Refill profit — this month', 'var(--green)', AED(refProfit), AED(refRev)+' issued to machines')}
+      ${kpi('Collections — this month', 'var(--violet)', AED(coll), NUM(S.c.collections.filter(c=>c.date>=mS).length)+' collections')}
+      ${kpi('Collections profit', collProfit>=0?'var(--green)':'var(--red)', `<span class="${collProfit>=0?'':'neg'}">${AED(collProfit)}</span>`, 'collections − refill COGS')}
+      ${kpi('Expiring ≤ 30 days', 'var(--amber)', NUM(expSoonQ)+' <span style="font-size:15px">units</span>', expiredQ>0 ? `<span class="neg">${NUM(expiredQ)} already expired</span>` : 'nothing expired')}
+      ${kpi('Low stock products', low>0?'var(--red)':'var(--green)', NUM(low), 'at or below minimum level')}
+    </div>
+    <div class="grid g2 mb">
+      <div class="card"><h3>Profit — last 6 months</h3>${chartBars(monthlySeries(6))}</div>
+      <div class="card"><h3>Stock value by location</h3>${donut(locVals)}</div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h3>Top products <span class="sp">refill revenue · 30 days</span></h3>${hbars(top)}</div>
+      <div class="card"><h3>Latest activity</h3>${
+        activityFeed().map(e=>`<div class="act"><span class="dot" style="background:${e.c}"></span><span>${e.txt}</span><span class="when">${timeAgo(e.t)}</span></div>`).join('')
+        || '<div class="mut" style="font-size:13.5px">Activity will appear here as you work.</div>'}</div>
+    </div>`);
+}
+</script>
+<script>
+/* ---------------- inventory ---------------- */
+function pgInventory(){
+  const f = S.f.inv ||= { q:'', loc:'', cat:'', exp:false, low:false };
+  const stk = stockBy();
+  const locs = activeLocs();
+  let expiredQ = 0, expSoonQ = 0, totalVal = 0;
+  stk.forEach(e => { expiredQ += e.expired; expSoonQ += e.expSoon; totalVal += e.val; });
+
+  const rows = [];
+  for (const p of activeProds()){
+    const e = stk.get(p.id) || {total:0, val:0, locs:{}, expSoon:0, expired:0};
+    const status = e.total <= 0 ? 'out' : (e.total <= (+p.min_stock||0) ? 'low' : 'ok');
+    if (f.q && !(p.name+' '+(p.sku||'')).toLowerCase().includes(f.q.toLowerCase())) continue;
+    if (f.cat && p.category_id !== f.cat) continue;
+    if (f.loc && !(e.locs[f.loc] > 0)) continue;
+    if (f.exp && !(e.expSoon > 0 || e.expired > 0)) continue;
+    if (f.low && status === 'ok') continue;
+    const tags = (e.expired>0 ? `<span class="tag t-bad">${NUM(e.expired)} expired</span> ` : '') +
+                 (e.expSoon>0 ? `<span class="tag t-warn">${NUM(e.expSoon)} ≤30d</span>` : '');
+    rows.push(`<tr>
+      <td><span class="bold">${esc(p.name)}</span>${p.sku?` <span class="mut">· ${esc(p.sku)}</span>`:''}${tags?`<div style="margin-top:3px">${tags}</div>`:''}</td>
+      <td class="mut">${esc(nameOf('categories', p.category_id))}</td>
+      ${locs.map(l=>`<td class="r">${e.locs[l.id] ? NUM(e.locs[l.id]) : '<span class="mut">—</span>'}</td>`).join('')}
+      <td class="r bold">${NUM(e.total)}</td>
+      <td class="r">${AED(e.val)}</td>
+      <td>${stPill(status)}</td>
+      ${rowBtns(viewIB(`batchesModal('${p.id}')`))}
+    </tr>`);
+  }
+  const wl = S.c.adjustments.slice(0,15);
+  page('Inventory', ghostBtn('Export CSV', 'invCSV()'), `
+    <div class="fbar">
+      <div class="grow"><label>Search</label><input value="${esc(f.q)}" placeholder="Product or SKU…" oninput="S.f.inv.q=this.value;invRe(this)"></div>
+      <div><label>Location</label><select onchange="S.f.inv.loc=this.value;pgInventory()">${['<option value="">All locations</option>',...locs.map(l=>`<option value="${l.id}"${f.loc===l.id?' selected':''}>${esc(l.name)}</option>`)].join('')}</select></div>
+      <div><label>Category</label><select onchange="S.f.inv.cat=this.value;pgInventory()">${['<option value="">All categories</option>',...S.c.categories.map(c=>`<option value="${c.id}"${f.cat===c.id?' selected':''}>${esc(c.name)}</option>`)].join('')}</select></div>
+      <label class="chk"><input type="checkbox" ${f.exp?'checked':''} onchange="S.f.inv.exp=this.checked;pgInventory()"> Expiry risk ${expSoonQ+expiredQ>0?`<span class="tag t-warn">${NUM(expSoonQ+expiredQ)}</span>`:''}</label>
+      <label class="chk"><input type="checkbox" ${f.low?'checked':''} onchange="S.f.inv.low=this.checked;pgInventory()"> Low / out only</label>
+    </div>
+    ${tbl(['Product','Category', ...locs.map(l=>[esc(l.name),'r']), ['Total','r'], ['Value (cost)','r'], 'Status', ''], rows,
+      { empty:'No products match these filters.',
+        foot:`<tr class="tfoot"><td colspan="${2+locs.length}" style="text-align:right">Total stock value</td><td class="r">${AED(totalVal)}</td><td colspan="2"></td></tr>` })}
+    <div class="sec-title">Waste &amp; adjustments <span class="coin"></span></div>
+    ${tbl(['Date','Product','Location',['Qty','r'],'Reason','Notes',''],
+      wl.map(a=>`<tr><td class="mut">${fmtD(a.date)}</td><td>${esc(nameOf('products',a.product_id))}</td>
+        <td class="mut">${esc(nameOf('locations',a.location_id))}</td><td class="r neg">−${NUM(a.qty)}</td>
+        <td><span class="pill p-gray">${esc(a.reason||'other')}</span></td><td class="mut">${esc(a.notes||'')}</td>
+        ${rowBtns(delIB(`delAdj('${a.id}')`))}</tr>`),
+      { empty:'No waste recorded. Use the eye icon on a product to write off a batch.' })}`);
+}
+let invT = null;
+function invRe(inp){ clearTimeout(invT); invT = setTimeout(()=>{ const p = inp.selectionStart; pgInventory();
+  const el2 = document.querySelector('.fbar input'); if (el2){ el2.focus(); el2.setSelectionRange(p,p); } }, 350); }
+function invCSV(){
+  const stk = stockBy(), locs = activeLocs();
+  const rows = [['Product','SKU','Category', ...locs.map(l=>l.name), 'Total','Value AED','Expiring<=30d','Expired']];
+  for (const p of activeProds()){ const e = stk.get(p.id)||{total:0,val:0,locs:{},expSoon:0,expired:0};
+    rows.push([p.name, p.sku||'', nameOf('categories',p.category_id), ...locs.map(l=>e.locs[l.id]||0), e.total, e.val.toFixed(2), e.expSoon, e.expired]); }
+  dlCSV(rows, 'stock-'+todayStr()+'.csv');
+}
+function batchesModal(pid){
+  const p = rec('products', pid);
+  const bs = S.c.batches.filter(b => b.product_id === pid && +b.qty_remaining > 0);
+  const rows = bs.map(b => {
+    const d = b.expiry_date ? daysTo(b.expiry_date) : null;
+    const badge = d===null ? '' : d < 0 ? ' <span class="tag t-bad">expired</span>' : d <= 30 ? ` <span class="tag t-warn">${d}d</span>` : '';
+    const src = b.purchase_id ? esc(rec('purchases',b.purchase_id)?.ref_no || 'Purchase') : (b.transfer_id ? 'Transfer' : 'Manual');
+    return `<tr><td class="mut">${esc(nameOf('locations', b.location_id))}</td>
+      <td>${fmtD(b.expiry_date)}${badge}</td>
+      <td class="r">${AED(b.unit_cost)}</td>
+      <td class="r">${NUM(b.qty_received)}</td>
+      <td class="r bold">${NUM(b.qty_remaining)}</td>
+      <td class="mut">${src}</td>
+      ${rowBtns(`<button class="btn sm ghost" onclick="wasteModal('${b.id}')">Write off</button>`)}</tr>`; });
+  openModal(esc(p.name) + ' — batches',
+    rows.length ? `<div class="twrap" style="margin-bottom:10px"><table class="tbl" style="min-width:560px"><thead><tr><th>Location</th><th>Expiry</th><th class="r">Cost</th><th class="r">In</th><th class="r">Left</th><th>Source</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div><div class="mnote">Refills consume the earliest expiry first (FEFO).</div>`
+    : '<p class="mut" style="padding-bottom:10px">No stock on hand for this product.</p>', { wide:true });
+}
+function wasteModal(bid){
+  const b = rec('batches', bid), p = rec('products', b.product_id);
+  openModal('Write off — ' + esc(p.name), `
+    <div class="mnote">${esc(nameOf('locations', b.location_id))} · expiry ${fmtD(b.expiry_date)} · <b>${NUM(b.qty_remaining)}</b> remaining</div>
+    <div class="frow">
+      ${F.inp('wQty','Quantity',{type:'number',req:true,min:0,max:+b.qty_remaining,step:'any',val:+b.qty_remaining})}
+      ${F.sel('wReason','Reason',[['expired','Expired'],['damaged','Damaged'],['correction','Count correction'],['other','Other']],'expired',{noEmpty:true})}
+    </div>
+    ${F.area('wNotes','Notes')}`, { saveLabel:'Write off', danger:true, onSave: async () => {
+      const q = n_('wQty');
+      if (!(q > 0) || q > +b.qty_remaining + 1e-9) throw Error('Quantity must be between 0 and ' + NUM(b.qty_remaining));
+      let r = await sb.from('adjustments').insert({ batch_id:b.id, product_id:b.product_id, location_id:b.location_id,
+        qty:q, reason:v('wReason'), notes:v('wNotes')||null, date:todayStr() });
+      if (r.error) throw r.error;
+      r = await sb.from('batches').update({ qty_remaining: r4(+b.qty_remaining - q) }).eq('id', b.id);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast('Stock written off', 'ok');
+    }});
+}
+function delAdj(id){
+  const a = rec('adjustments', id);
+  askConfirm('Undo this write-off? The quantity goes back into the batch.', async () => {
+    const b = rec('batches', a.batch_id);
+    if (b){ const r = await sb.from('batches').update({ qty_remaining: r4(+b.qty_remaining + +a.qty) }).eq('id', b.id); if (r.error) throw r.error; }
+    const r2 = await sb.from('adjustments').delete().eq('id', id); if (r2.error) throw r2.error;
+    closeModal(); await refresh(); toast('Write-off undone', 'ok');
+  }, 'Undo write-off');
+}
+
+/* ---------------- purchases ---------------- */
+function purchaseTotals(id){
+  let items = 0, cost = 0;
+  for (const b of S.c.batches){ if (b.purchase_id !== id) continue; items++; cost += b.qty_received*(+b.unit_cost||0); }
+  return { items, cost };
+}
+function pgPurchases(){
+  const rows = S.c.purchases.map(p => { const t = purchaseTotals(p.id);
+    return `<tr><td class="mut">${fmtD(p.date)}</td><td>${esc(p.ref_no||'—')}</td>
+      <td>${esc(nameOf('suppliers', p.supplier_id))}</td><td class="mut">${esc(nameOf('locations', p.location_id))}</td>
+      <td class="r">${t.items}</td><td class="r bold">${AED(t.cost)}</td>
+      ${rowBtns(viewIB(`viewPurchase('${p.id}')`), delIB(`delPurchase('${p.id}')`))}</tr>`; });
+  page('Purchases', addBtn('Receive stock', 'newPurchase()'),
+    tbl(['Date','Ref','Supplier','To location',['Lines','r'],['Total cost','r'],''], rows,
+      { empty:'No purchases yet. Receive your first delivery to create stock batches.', emptyBtn: addBtn('Receive stock','newPurchase()') }));
+}
+function purLineHTML(){
+  return `<div class="line pl-line">
+    <div class="full"><label>Product</label><select class="lp" required onchange="purProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal"></div>
+    <div><label>Unit cost</label><input class="lc" type="number" min="0" step="any" inputmode="decimal"></div>
+    <div><label>Expiry</label><input class="le" type="date"></div>
+    <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
+  </div>`;
+}
+function purProd(sel){ const p = rec('products', sel.value);
+  if (p) sel.closest('.line').querySelector('.lc').value = +p.cost_price || ''; }
+function addPurLine(){ $('plines').insertAdjacentHTML('beforeend', purLineHTML()); }
+function newPurchase(){
+  openModal('Receive stock', `
+    <div class="frow f3">
+      ${F.sel('pSup','Supplier', LISTS.sups())}
+      ${F.sel('pLoc','To location', LISTS.locs(), '', {req:true, emptyLabel:'Choose…'})}
+      ${F.inp('pDate','Date',{type:'date',val:todayStr(),req:true})}
+    </div>
+    <div class="frow">${F.inp('pRef','Reference / invoice no.')}<div></div></div>
+    <div id="plines">${purLineHTML()}</div>
+    <button type="button" class="btn ghost sm" onclick="addPurLine()">${ic('plus',14)} Add line</button>
+    ${F.area('pNotes','Notes')}`, { wide:true, saveLabel:'Receive', onSave: async () => {
+      const lines = [...document.querySelectorAll('#plines .line')].map(r => ({
+        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value,
+        cost: +r.querySelector('.lc').value || 0, exp: r.querySelector('.le').value || null }));
+      if (!lines.length) throw Error('Add at least one line');
+      for (const l of lines) if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
+      if (!v('pLoc')) throw Error('Choose the receiving location');
+      const head = { supplier_id:v('pSup')||null, location_id:v('pLoc'), ref_no:v('pRef')||null, date:v('pDate')||todayStr(), notes:v('pNotes')||null };
+      const { data, error } = await sb.from('purchases').insert(head).select().single();
+      if (error) throw error;
+      const r2 = await sb.from('batches').insert(lines.map(l => ({ purchase_id:data.id, product_id:l.product_id,
+        location_id:head.location_id, qty_received:l.qty, qty_remaining:l.qty, unit_cost:l.cost, expiry_date:l.exp })));
+      if (r2.error){ await sb.from('purchases').delete().eq('id', data.id); throw r2.error; }
+      closeModal(); await refresh(); toast('Stock received', 'ok');
+    }});
+}
+function viewPurchase(id){
+  const p = rec('purchases', id), t = purchaseTotals(id);
+  const rows = S.c.batches.filter(b => b.purchase_id === id).map(b => `<tr>
+    <td>${esc(nameOf('products', b.product_id))}</td><td>${fmtD(b.expiry_date)}</td>
+    <td class="r">${NUM(b.qty_received)}</td><td class="r">${NUM(b.qty_remaining)}</td>
+    <td class="r">${AED(b.unit_cost)}</td><td class="r">${AED(b.qty_received*(+b.unit_cost||0))}</td></tr>`).join('');
+  openModal('Purchase — ' + esc(p.ref_no || fmtD(p.date)), `
+    <div class="mnote">${esc(nameOf('suppliers',p.supplier_id))} → ${esc(nameOf('locations',p.location_id))} · ${fmtD(p.date)}${p.notes?'<br>'+esc(p.notes):''}</div>
+    <div class="twrap"><table class="tbl" style="min-width:540px"><thead><tr><th>Product</th><th>Expiry</th><th class="r">Qty</th><th class="r">Left</th><th class="r">Unit cost</th><th class="r">Total</th></tr></thead>
+    <tbody>${rows}</tbody><tbody class="tfoot"><tr><td colspan="5" style="text-align:right">Total</td><td class="r">${AED(t.cost)}</td></tr></tbody></table></div>
+    <div style="height:10px"></div>`, { wide:true });
+}
+function delPurchase(id){
+  const consumed = S.c.batches.some(b => b.purchase_id === id && +b.qty_remaining < +b.qty_received - 1e-9);
+  if (consumed) return toast('Part of this purchase was already issued — it can’t be deleted.', 'err');
+  askConfirm('Delete this purchase and its stock batches?', async () => {
+    const r = await sb.from('purchases').delete().eq('id', id); if (r.error) throw r.error;
+    closeModal(); await refresh(); toast('Purchase deleted', 'ok');
+  });
+}
+
+/* ---------------- refills (issues) ---------------- */
+function pgRefills(){
+  const rows = S.c.issues.map(i => { const val = issueValue(i.id); const profit = val.rev - val.cogs;
+    return `<tr><td class="mut">${fmtD(i.date)}</td><td>${esc(nameOf('employees', i.employee_id))}</td>
+      <td>${machLabel(i.machine_id)}</td><td class="mut">${esc(nameOf('locations', i.location_id))}</td>
+      <td class="r">${AED(val.rev)}</td><td class="r mut">${AED(val.cogs)}</td>
+      <td class="r bold ${profit>=0?'pos':'neg'}">${AED(profit)}</td>
+      ${rowBtns(viewIB(`viewRefill('${i.id}')`), delIB(`delRefill('${i.id}')`))}</tr>`; });
+  page('Refills', addBtn('New refill', 'newRefill()'),
+    `<div class="mnote mb">A refill moves stock from a location into a machine — earliest expiry goes first (FEFO). Its value at sale price is your first profit basis.</div>` +
+    tbl(['Date','Employee','Machine','From',['Value','r'],['Cost','r'],['Profit','r'],''], rows,
+      { empty:'No refills yet. Record what an employee loads into a machine.', emptyBtn: addBtn('New refill','newRefill()') }));
+}
+function refLineHTML(){
+  return `<div class="line rf-line">
+    <div class="full"><label>Product</label><select class="lp" required onchange="refProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
+    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal" oninput="refHint(this.closest('.line'))"></div>
+    <div><label>Unit price</label><input class="ls" type="number" min="0" step="any" inputmode="decimal"></div>
+    <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
+  </div>`;
+}
+function refProd(sel){
+  const p = rec('products', sel.value), line = sel.closest('.line');
+  if (p) line.querySelector('.ls').value = +p.sale_price || '';
+  refHint(line);
+}
+function refHint(line){
+  const pid = line.querySelector('.lp').value, loc = v('rLoc'), h = line.querySelector('.hint');
+  if (!pid || !loc){ h.innerHTML = ''; return; }
+  const av = availAt(pid, loc), q = +line.querySelector('.lq').value || 0;
+  h.innerHTML = `Available: <b>${NUM(av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+}
+function refLocChange(){ document.querySelectorAll('#rlines .line').forEach(refHint); }
+function refMach(sel){ const m = rec('machines', sel.value);
+  if (m && m.location_id) $('rLoc').value = m.location_id; refLocChange(); }
+function addRefLine(){ $('rlines').insertAdjacentHTML('beforeend', refLineHTML()); }
+function newRefill(){
+  openModal('New refill', `
+    <div class="frow f3">
+      ${F.inp('rDate','Date',{type:'date',val:todayStr(),req:true})}
+      ${F.sel('rEmp','Employee', LISTS.emps(), '', {req:true, emptyLabel:'Choose…'})}
+      ${F.sel('rMach','Machine', LISTS.machs(), '', {req:true, emptyLabel:'Choose…', onch:'refMach(this)'})}
+    </div>
+    <div class="frow">${F.sel('rLoc','From location', LISTS.locs(), '', {req:true, emptyLabel:'Choose…', onch:'refLocChange()'})}<div></div></div>
+    <div id="rlines">${refLineHTML()}</div>
+    <button type="button" class="btn ghost sm" onclick="addRefLine()">${ic('plus',14)} Add line</button>
+    ${F.area('rNotes','Notes')}`, { wide:true, saveLabel:'Save refill', onSave: async () => {
+      const loc = v('rLoc');
+      if (!loc || !v('rEmp') || !v('rMach')) throw Error('Employee, machine and location are required');
+      const lines = [...document.querySelectorAll('#rlines .line')].map(r => ({
+        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value, price: +r.querySelector('.ls').value || 0 }));
+      if (!lines.length) throw Error('Add at least one line');
+      const work = new Map(), allocs = [];
+      for (const l of lines){
+        if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
+        const picks = fefoPick(l.product_id, loc, l.qty, work);
+        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', loc)} (available ${NUM(availAt(l.product_id, loc))})`);
+        const cost = picks.reduce((s,p)=>s + p.t*(+p.b.unit_cost||0), 0) / l.qty;
+        allocs.push({ l, picks, cost });
+      }
+      const { data, error } = await sb.from('issues').insert({ date:v('rDate')||todayStr(), employee_id:v('rEmp'),
+        machine_id:v('rMach'), location_id:loc, notes:v('rNotes')||null }).select().single();
+      if (error) throw error;
+      const items = allocs.map(a => ({ issue_id:data.id, product_id:a.l.product_id, qty:a.l.qty,
+        unit_cost:r4(a.cost), unit_price:a.l.price, alloc:a.picks.map(p=>({b:p.b.id, q:p.t})) }));
+      const r2 = await sb.from('issue_items').insert(items);
+      if (r2.error){ await sb.from('issues').delete().eq('id', data.id); throw r2.error; }
+      for (const [bid, remain] of work){ const r3 = await sb.from('batches').update({ qty_remaining:r4(remain) }).eq('id', bid);
+        if (r3.error) throw r3.error; }
+      closeModal(); await refresh(); toast('Refill saved — stock moved to machine', 'ok');
+    }});
+}
+function viewRefill(id){
+  const i = rec('issues', id), val = issueValue(id);
+  const rows = S.c.issue_items.filter(x => x.issue_id === id).map(x => `<tr>
+    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${NUM(x.qty)}</td>
+    <td class="r">${AED(x.unit_price)}</td><td class="r mut">${AED(x.unit_cost)}</td>
+    <td class="r">${AED(x.qty*x.unit_price)}</td>
+    <td class="r ${x.unit_price-x.unit_cost>=0?'pos':'neg'}">${AED(x.qty*(x.unit_price-x.unit_cost))}</td></tr>`).join('');
+  openModal('Refill — ' + fmtD(i.date), `
+    <div class="mnote">${esc(nameOf('employees',i.employee_id))} → ${machLabel(i.machine_id)} · from ${esc(nameOf('locations',i.location_id))}${i.notes?'<br>'+esc(i.notes):''}</div>
+    <div class="twrap"><table class="tbl" style="min-width:560px"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Cost</th><th class="r">Value</th><th class="r">Profit</th></tr></thead>
+    <tbody>${rows}</tbody><tbody class="tfoot"><tr><td colspan="4" style="text-align:right">Totals</td><td class="r">${AED(val.rev)}</td><td class="r">${AED(val.rev-val.cogs)}</td></tr></tbody></table></div>
+    <div style="height:10px"></div>`, { wide:true });
+}
+function delRefill(id){
+  askConfirm('Delete this refill? The stock goes back to its source batches.', async () => {
+    for (const it of S.c.issue_items.filter(x => x.issue_id === id)){
+      for (const a of (it.alloc || [])){
+        const b = rec('batches', a.b); if (!b) continue;
+        const r = await sb.from('batches').update({ qty_remaining: r4(+b.qty_remaining + +a.q) }).eq('id', b.id);
+        if (r.error) throw r.error; b.qty_remaining = +b.qty_remaining + +a.q;
+      }
+    }
+    const r2 = await sb.from('issues').delete().eq('id', id); if (r2.error) throw r2.error;
+    closeModal(); await refresh(); toast('Refill deleted — stock restored', 'ok');
+  });
+}
+</script>
+<script>
+/* ---------------- collections ---------------- */
+function pgCollections(){
+  const rows = S.c.collections.map(c => `<tr><td class="mut">${fmtD(c.date)}</td>
+    <td>${machLabel(c.machine_id)}</td><td class="mut">${esc(nameOf('employees', c.employee_id))}</td>
+    <td class="r bold">${AED(c.amount)}</td><td class="mut">${esc(c.notes||'')}</td>
+    ${rowBtns(editIB(`collModal('${c.id}')`), delIB(`delColl('${c.id}')`))}</tr>`);
+  page('Collections', addBtn('Record collection', 'collModal()'),
+    `<div class="mnote mb">Cash actually collected from each machine — your second profit basis, compared against refill cost.</div>` +
+    tbl(['Date','Machine','Employee',['Amount','r'],'Notes',''], rows,
+      { empty:'No collections yet. Record the cash you pull from a machine.', emptyBtn: addBtn('Record collection','collModal()') }));
+}
+function collModal(id){
+  const c = id ? rec('collections', id) : {};
+  openModal(id ? 'Edit collection' : 'Record collection', `
+    <div class="frow">
+      ${F.inp('cDate','Date',{type:'date',val:c.date||todayStr(),req:true})}
+      ${F.inp('cAmt','Amount (AED)',{type:'number',min:0,step:'any',req:true,val:c.amount??''})}
+    </div>
+    <div class="frow">
+      ${F.sel('cMach','Machine', LISTS.machs(), c.machine_id, {req:true, emptyLabel:'Choose…'})}
+      ${F.sel('cEmp','Collected by', LISTS.emps(), c.employee_id)}
+    </div>
+    ${F.area('cNotes','Notes', c.notes||'')}`, { onSave: async () => {
+      if (!v('cMach')) throw Error('Choose a machine');
+      if (!(n_('cAmt') >= 0)) throw Error('Enter the amount');
+      const row = { date:v('cDate')||todayStr(), machine_id:v('cMach'), employee_id:v('cEmp')||null,
+        amount:n_('cAmt'), notes:v('cNotes')||null };
+      const r = id ? await sb.from('collections').update(row).eq('id', id) : await sb.from('collections').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Collection updated' : 'Collection recorded', 'ok');
+    }});
+}
+function delColl(id){
+  askConfirm('Delete this collection record?', async () => {
+    const r = await sb.from('collections').delete().eq('id', id); if (r.error) throw r.error;
+    closeModal(); await refresh(); toast('Collection deleted', 'ok');
+  });
+}
+
+/* ---------------- transfers ---------------- */
+function transferTotals(id){
+  let items = 0, qty = 0;
+  for (const t of S.c.transfer_items){ if (t.transfer_id !== id) continue; items++; qty += +t.qty; }
+  return { items, qty };
+}
+function pgTransfers(){
+  const rows = S.c.transfers.map(t => { const tt = transferTotals(t.id);
+    return `<tr><td class="mut">${fmtD(t.date)}</td>
+      <td>${esc(nameOf('locations', t.from_location_id))} <span class="mut">→</span> ${esc(nameOf('locations', t.to_location_id))}</td>
+      <td class="mut">${esc(nameOf('employees', t.employee_id))}</td>
+      <td class="r">${tt.items}</td><td class="r">${NUM(tt.qty)}</td>
+      ${rowBtns(viewIB(`viewTransfer('${t.id}')`), delIB(`delTransfer('${t.id}')`))}</tr>`; });
+  page('Transfers', addBtn('New transfer', 'newTransfer()'),
+    tbl(['Date','Route','By',['Lines','r'],['Units','r'],''], rows,
+      { empty:'No transfers yet. Move stock between your locations here.', emptyBtn: addBtn('New transfer','newTransfer()') }));
+}
+function trLineHTML(){
+  return `<div class="line tr-line">
+    <div class="full"><label>Product</label><select class="lp" required onchange="trHint(this.closest('.line'))"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
+    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal" oninput="trHint(this.closest('.line'))"></div>
+    <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
+  </div>`;
+}
+function trHint(line){
+  const pid = line.querySelector('.lp').value, loc = v('tFrom'), h = line.querySelector('.hint');
+  if (!pid || !loc){ h.innerHTML = ''; return; }
+  const av = availAt(pid, loc), q = +line.querySelector('.lq').value || 0;
+  h.innerHTML = `Available: <b>${NUM(av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+}
+function trFromChange(){ document.querySelectorAll('#tlines .line').forEach(trHint); }
+function addTrLine(){ $('tlines').insertAdjacentHTML('beforeend', trLineHTML()); }
+function newTransfer(){
+  openModal('Transfer stock', `
+    <div class="frow f3">
+      ${F.inp('tDate','Date',{type:'date',val:todayStr(),req:true})}
+      ${F.sel('tFrom','From', LISTS.locs(), '', {req:true, emptyLabel:'Choose…', onch:'trFromChange()'})}
+      ${F.sel('tTo','To', LISTS.locs(), '', {req:true, emptyLabel:'Choose…'})}
+    </div>
+    <div class="frow">${F.sel('tEmp','Moved by', LISTS.emps())}<div></div></div>
+    <div id="tlines">${trLineHTML()}</div>
+    <button type="button" class="btn ghost sm" onclick="addTrLine()">${ic('plus',14)} Add line</button>
+    ${F.area('tNotes','Notes')}`, { wide:true, saveLabel:'Transfer', onSave: async () => {
+      const from = v('tFrom'), to = v('tTo');
+      if (!from || !to) throw Error('Choose both locations');
+      if (from === to) throw Error('Source and destination must differ');
+      const lines = [...document.querySelectorAll('#tlines .line')].map(r => ({
+        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value }));
+      if (!lines.length) throw Error('Add at least one line');
+      const work = new Map(), allocs = [];
+      for (const l of lines){
+        if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
+        const picks = fefoPick(l.product_id, from, l.qty, work);
+        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', from)}`);
+        const cost = picks.reduce((s,p)=>s + p.t*(+p.b.unit_cost||0), 0) / l.qty;
+        allocs.push({ l, picks, cost });
+      }
+      const { data, error } = await sb.from('transfers').insert({ date:v('tDate')||todayStr(),
+        from_location_id:from, to_location_id:to, employee_id:v('tEmp')||null, notes:v('tNotes')||null }).select().single();
+      if (error) throw error;
+      const items = allocs.map(a => ({ transfer_id:data.id, product_id:a.l.product_id, qty:a.l.qty,
+        unit_cost:r4(a.cost), alloc:a.picks.map(p=>({b:p.b.id, q:p.t})) }));
+      let r2 = await sb.from('transfer_items').insert(items);
+      if (r2.error){ await sb.from('transfers').delete().eq('id', data.id); throw r2.error; }
+      const destRows = [];
+      for (const a of allocs) for (const p of a.picks)
+        destRows.push({ transfer_id:data.id, product_id:a.l.product_id, location_id:to, qty_received:p.t,
+          qty_remaining:p.t, unit_cost:+p.b.unit_cost||0, expiry_date:p.b.expiry_date });
+      r2 = await sb.from('batches').insert(destRows); if (r2.error) throw r2.error;
+      for (const [bid, remain] of work){ const r3 = await sb.from('batches').update({ qty_remaining:r4(remain) }).eq('id', bid);
+        if (r3.error) throw r3.error; }
+      closeModal(); await refresh(); toast('Stock transferred', 'ok');
+    }});
+}
+function viewTransfer(id){
+  const t = rec('transfers', id);
+  const rows = S.c.transfer_items.filter(x => x.transfer_id === id).map(x => `<tr>
+    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${NUM(x.qty)}</td>
+    <td class="r mut">${AED(x.unit_cost)}</td><td class="r">${AED(x.qty*(+x.unit_cost||0))}</td></tr>`).join('');
+  openModal('Transfer — ' + fmtD(t.date), `
+    <div class="mnote">${esc(nameOf('locations',t.from_location_id))} → ${esc(nameOf('locations',t.to_location_id))}${t.notes?'<br>'+esc(t.notes):''}</div>
+    <div class="twrap"><table class="tbl" style="min-width:440px"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Value</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="height:10px"></div>`);
+}
+function delTransfer(id){
+  const dest = S.c.batches.filter(b => b.transfer_id === id);
+  if (dest.some(b => +b.qty_remaining < +b.qty_received - 1e-9))
+    return toast('Stock from this transfer was already used at the destination — it can’t be deleted.', 'err');
+  askConfirm('Delete this transfer? Stock returns to the source location.', async () => {
+    for (const it of S.c.transfer_items.filter(x => x.transfer_id === id)){
+      for (const a of (it.alloc || [])){
+        const b = rec('batches', a.b); if (!b) continue;
+        const r = await sb.from('batches').update({ qty_remaining: r4(+b.qty_remaining + +a.q) }).eq('id', b.id);
+        if (r.error) throw r.error; b.qty_remaining = +b.qty_remaining + +a.q;
+      }
+    }
+    let r = await sb.from('batches').delete().eq('transfer_id', id); if (r.error) throw r.error;
+    r = await sb.from('transfers').delete().eq('id', id); if (r.error) throw r.error;
+    closeModal(); await refresh(); toast('Transfer deleted — stock restored', 'ok');
+  });
+}
+
+/* ---------------- catalog: products ---------------- */
+function pgProducts(){
+  const stk = stockBy();
+  const rows = S.c.products.map(p => { const e = stk.get(p.id);
+    const margin = +p.sale_price > 0 ? (p.sale_price - p.cost_price)/p.sale_price : 0;
+    return `<tr style="${p.is_active===false?'opacity:.45':''}">
+      <td><span class="bold">${esc(p.name)}</span>${p.sku?` <span class="mut">· ${esc(p.sku)}</span>`:''}</td>
+      <td class="mut">${esc(nameOf('categories', p.category_id))}</td>
+      <td class="mut">${esc(p.unit||'pc')}</td>
+      <td class="r">${AED(p.cost_price)}</td><td class="r">${AED(p.sale_price)}</td>
+      <td class="r ${margin>=0?'pos':'neg'}">${PCT(margin)}</td>
+      <td class="r">${NUM(e?e.total:0)}</td>
+      <td>${p.is_active===false?'<span class="pill p-gray">Inactive</span>':'<span class="pill p-teal">Active</span>'}</td>
+      ${rowBtns(editIB(`productModal('${p.id}')`), delIB(`delRow('products','${p.id}','product')`))}</tr>`; });
+  page('Products', addBtn('Add product', 'productModal()'),
+    tbl(['Product','Category','Unit',['Cost','r'],['Sale','r'],['Margin','r'],['Stock','r'],'Status',''], rows,
+      { empty:'No products yet — add coffee beans, snacks, water and everything your machines sell.', emptyBtn: addBtn('Add product','productModal()') }));
+}
+function productModal(id){
+  const p = id ? rec('products', id) : {};
+  openModal(id ? 'Edit product' : 'Add product', `
+    <div class="frow">${F.inp('prName','Name',{req:true,val:p.name||''})}${F.inp('prSku','SKU / code',{val:p.sku||''})}</div>
+    <div class="frow">${F.sel('prCat','Category', LISTS.cats(), p.category_id)}${F.inp('prUnit','Unit',{val:p.unit||'pc',ph:'pc, kg, bottle…'})}</div>
+    <div class="frow f3">
+      ${F.inp('prCost','Cost price (AED)',{type:'number',min:0,step:'any',val:p.cost_price??''})}
+      ${F.inp('prSale','Sale price (AED)',{type:'number',min:0,step:'any',val:p.sale_price??''})}
+      ${F.inp('prMin','Min stock',{type:'number',min:0,step:'any',val:p.min_stock??0})}
+    </div>
+    ${id?`<label class="chk"><input type="checkbox" id="prAct" ${p.is_active!==false?'checked':''}> Active</label>`:''}`,
+    { onSave: async () => {
+      if (!v('prName')) throw Error('Name is required');
+      const row = { name:v('prName'), sku:v('prSku')||null, category_id:v('prCat')||null, unit:v('prUnit')||'pc',
+        cost_price:n_('prCost'), sale_price:n_('prSale'), min_stock:n_('prMin') };
+      if (id) row.is_active = $('prAct').checked;
+      const r = id ? await sb.from('products').update(row).eq('id', id) : await sb.from('products').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Product updated' : 'Product added', 'ok');
+    }});
+}
+
+/* ---------------- catalog: machines ---------------- */
+const MTYPE = { coffee:'Coffee', snacks:'Snacks', combo:'Combo' };
+function pgMachines(){
+  const mS = firstOfMonth();
+  const rows = S.c.machines.map(m => {
+    const coll = S.c.collections.filter(c => c.machine_id === m.id && c.date >= mS).reduce((s,c)=>s + +c.amount, 0);
+    return `<tr><td class="bold">${esc(m.code||'—')}</td><td>${esc(m.name||'—')}</td>
+      <td><span class="pill ${m.type==='coffee'?'p-teal':m.type==='combo'?'p-vio':'p-gray'}">${MTYPE[m.type]||'Snacks'}</span></td>
+      <td class="mut">${esc(m.site||'—')}</td><td class="mut">${esc(nameOf('locations', m.location_id))}</td>
+      <td class="r">${AED(coll)}</td>
+      <td>${m.status==='active'?'<span class="pill p-ok">Active</span>':m.status==='maintenance'?'<span class="pill p-low">Maintenance</span>':'<span class="pill p-gray">Inactive</span>'}</td>
+      ${rowBtns(editIB(`machineModal('${m.id}')`), delIB(`delRow('machines','${m.id}','machine')`))}</tr>`; });
+  page('Machines', addBtn('Add machine', 'machineModal()'),
+    tbl(['Code','Name','Type','Site / client','Served from',['Collections MTD','r'],'Status',''], rows,
+      { empty:'No machines yet — add your coffee and snack machines with their site.', emptyBtn: addBtn('Add machine','machineModal()') }));
+}
+function machineModal(id){
+  const m = id ? rec('machines', id) : {};
+  openModal(id ? 'Edit machine' : 'Add machine', `
+    <div class="frow">${F.inp('mCode','Code',{val:m.code||'',ph:'e.g. DXB-01'})}${F.inp('mName','Name',{val:m.name||'',req:true})}</div>
+    <div class="frow">${F.sel('mType','Type', Object.entries(MTYPE), m.type||'snacks', {noEmpty:true})}${F.inp('mSite','Site / client',{val:m.site||'',ph:'Mall, office, hospital…'})}</div>
+    <div class="frow">
+      ${F.sel('mLoc','Served from location', LISTS.locs(), m.location_id)}
+      ${F.sel('mStatus','Status', [['active','Active'],['maintenance','Maintenance'],['inactive','Inactive']], m.status||'active', {noEmpty:true})}
+    </div>`, { onSave: async () => {
+      if (!v('mName')) throw Error('Name is required');
+      const row = { code:v('mCode')||null, name:v('mName'), type:v('mType'), site:v('mSite')||null,
+        location_id:v('mLoc')||null, status:v('mStatus') };
+      const r = id ? await sb.from('machines').update(row).eq('id', id) : await sb.from('machines').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Machine updated' : 'Machine added', 'ok');
+    }});
+}
+
+/* ---------------- catalog: suppliers & employees ---------------- */
+function pgSuppliers(){
+  const rows = S.c.suppliers.map(s => {
+    const spend = S.c.purchases.filter(p => p.supplier_id === s.id)
+      .reduce((sum,p) => sum + purchaseTotals(p.id).cost, 0);
+    return `<tr><td class="bold">${esc(s.name)}</td><td class="mut">${esc(s.contact_person||'—')}</td>
+      <td class="mut">${esc(s.phone||'—')}</td><td class="mut">${esc(s.email||'—')}</td>
+      <td class="r">${AED(spend)}</td>
+      ${rowBtns(editIB(`supplierModal('${s.id}')`), delIB(`delRow('suppliers','${s.id}','supplier')`))}</tr>`; });
+  page('Suppliers', addBtn('Add supplier', 'supplierModal()'),
+    tbl(['Supplier','Contact','Phone','Email',['Total purchases','r'],''], rows,
+      { empty:'No suppliers yet — add the companies you buy coffee, snacks and water from.', emptyBtn: addBtn('Add supplier','supplierModal()') }));
+}
+function supplierModal(id){
+  const s = id ? rec('suppliers', id) : {};
+  openModal(id ? 'Edit supplier' : 'Add supplier', `
+    <div class="frow">${F.inp('sName','Company name',{req:true,val:s.name||''})}${F.inp('sContact','Contact person',{val:s.contact_person||''})}</div>
+    <div class="frow">${F.inp('sPhone','Phone',{type:'tel',val:s.phone||''})}${F.inp('sEmail','Email',{type:'email',val:s.email||''})}</div>
+    ${F.area('sNotes','Notes', s.notes||'')}`, { onSave: async () => {
+      if (!v('sName')) throw Error('Name is required');
+      const row = { name:v('sName'), contact_person:v('sContact')||null, phone:v('sPhone')||null,
+        email:v('sEmail')||null, notes:v('sNotes')||null };
+      const r = id ? await sb.from('suppliers').update(row).eq('id', id) : await sb.from('suppliers').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Supplier updated' : 'Supplier added', 'ok');
+    }});
+}
+function pgEmployees(){
+  const mS = firstOfMonth();
+  const rows = S.c.employees.map(e => {
+    const refills = S.c.issues.filter(i => i.employee_id === e.id && i.date >= mS);
+    const val = refills.reduce((s,i)=>s + issueValue(i.id).rev, 0);
+    return `<tr style="${e.is_active===false?'opacity:.45':''}"><td class="bold">${esc(e.name)}</td>
+      <td class="mut">${esc(e.phone||'—')}</td><td class="mut">${esc(e.role||'—')}</td>
+      <td class="r">${refills.length}</td><td class="r">${AED(val)}</td>
+      <td>${e.is_active===false?'<span class="pill p-gray">Inactive</span>':'<span class="pill p-ok">Active</span>'}</td>
+      ${rowBtns(editIB(`employeeModal('${e.id}')`), delIB(`delRow('employees','${e.id}','employee')`))}</tr>`; });
+  page('Employees', addBtn('Add employee', 'employeeModal()'),
+    tbl(['Name','Phone','Role',['Refills MTD','r'],['Refill value MTD','r'],'Status',''], rows,
+      { empty:'No employees yet — add the team who refill and collect from machines.', emptyBtn: addBtn('Add employee','employeeModal()') }));
+}
+function employeeModal(id){
+  const e = id ? rec('employees', id) : {};
+  openModal(id ? 'Edit employee' : 'Add employee', `
+    <div class="frow">${F.inp('eName','Name',{req:true,val:e.name||''})}${F.inp('ePhone','Phone',{type:'tel',val:e.phone||''})}</div>
+    <div class="frow">${F.inp('eRole','Role',{val:e.role||'',ph:'Route driver, technician…'})}
+      <div><label>&nbsp;</label><label class="chk" style="padding:9px 0 0"><input type="checkbox" id="eAct" ${e.is_active!==false?'checked':''}> Active</label></div></div>`,
+    { onSave: async () => {
+      if (!v('eName')) throw Error('Name is required');
+      const row = { name:v('eName'), phone:v('ePhone')||null, role:v('eRole')||null, is_active:$('eAct').checked };
+      const r = id ? await sb.from('employees').update(row).eq('id', id) : await sb.from('employees').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Employee updated' : 'Employee added', 'ok');
+    }});
+}
+function delRow(table, id, label){
+  askConfirm(`Delete this ${label}? If it has history, deletion is blocked — deactivate it instead.`, async () => {
+    const r = await sb.from(table).delete().eq('id', id);
+    if (r.error) throw Error(`This ${label} has linked records and can’t be deleted. Mark it inactive instead.`);
+    closeModal(); await refresh(); toast('Deleted', 'ok');
+  });
+}
+</script>
+<script>
+/* ---------------- reports ---------------- */
+const TPILL = { Purchase:'p-teal', Refill:'p-ok', Transfer:'p-vio', Waste:'p-out' };
+function movementRows(){
+  const out = [];
+  for (const b of S.c.batches){ if (!b.purchase_id) continue;
+    const p = rec('purchases', b.purchase_id); if (!p) continue;
+    out.push({ date:p.date, t:'Purchase', product_id:b.product_id, qty:+b.qty_received, loc:p.location_id,
+      detail:'from ' + nameOf('suppliers', p.supplier_id), emp:null, mach:null, sup:p.supplier_id,
+      value:b.qty_received*(+b.unit_cost||0) }); }
+  for (const it of S.c.issue_items){ const i = S.maps.issues.get(it.issue_id); if (!i) continue;
+    out.push({ date:i.date, t:'Refill', product_id:it.product_id, qty:+it.qty, loc:i.location_id,
+      detail:'→ ' + (rec('machines', i.machine_id) ? [rec('machines',i.machine_id).code, rec('machines',i.machine_id).name].filter(Boolean).join(' · ') : '—'),
+      emp:i.employee_id, mach:i.machine_id, sup:null, value:it.qty*(+it.unit_price||0) }); }
+  for (const x of S.c.transfer_items){ const t = S.maps.transfers.get(x.transfer_id); if (!t) continue;
+    out.push({ date:t.date, t:'Transfer', product_id:x.product_id, qty:+x.qty, loc:t.from_location_id, loc2:t.to_location_id,
+      detail:'→ ' + nameOf('locations', t.to_location_id), emp:t.employee_id, mach:null, sup:null,
+      value:x.qty*(+x.unit_cost||0) }); }
+  for (const a of S.c.adjustments){ const b = rec('batches', a.batch_id);
+    out.push({ date:a.date, t:'Waste', product_id:a.product_id, qty:+a.qty, loc:a.location_id,
+      detail:a.reason||'other', emp:null, mach:null, sup:null, value:a.qty*((b ? +b.unit_cost : 0)||0) }); }
+  return out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+function repFiltered(){
+  const f = S.f.rep;
+  return movementRows().filter(r =>
+    (!f.from || r.date >= f.from) && (!f.to || r.date <= f.to) &&
+    (!f.type || r.t === f.type) &&
+    (!f.loc || r.loc === f.loc || r.loc2 === f.loc) &&
+    (!f.prod || r.product_id === f.prod) &&
+    (!f.cat || rec('products', r.product_id)?.category_id === f.cat) &&
+    (!f.mach || r.mach === f.mach) &&
+    (!f.emp || r.emp === f.emp) &&
+    (!f.sup || r.sup === f.sup));
+}
+function repSet(k, val){ S.f.rep[k] = val; pgReports(); }
+function pgReports(){
+  const f = S.f.rep ||= { from:firstOfMonth(), to:todayStr(), type:'', loc:'', cat:'', prod:'', mach:'', emp:'', sup:'' };
+  const rows = repFiltered();
+  const sum = t => rows.filter(r=>r.t===t).reduce((s,r)=>s+r.value, 0);
+  const selHTML = (k, label, list, emptyLabel) => `<div><label>${label}</label>
+    <select onchange="repSet('${k}', this.value)"><option value="">${emptyLabel}</option>${
+      list.map(x=>`<option value="${x[0]}"${f[k]===String(x[0])?' selected':''}>${esc(x[1])}</option>`).join('')}</select></div>`;
+  const body = rows.slice(0, 400).map(r => `<tr>
+    <td class="mut">${fmtD(r.date)}</td>
+    <td><span class="pill ${TPILL[r.t]}">${r.t}</span></td>
+    <td>${esc(nameOf('products', r.product_id))}</td>
+    <td class="r ${r.t==='Purchase'?'pos':r.t==='Transfer'?'':'neg'}">${r.t==='Purchase'?'+':r.t==='Transfer'?'':'−'}${NUM(r.qty)}</td>
+    <td class="mut">${esc(nameOf('locations', r.loc))}</td>
+    <td class="mut">${esc(r.detail)}</td>
+    <td class="mut">${esc(r.emp ? nameOf('employees', r.emp) : '—')}</td>
+    <td class="r">${AED(r.value)}</td></tr>`);
+  page('Reports', ghostBtn('Export CSV', 'repCSV()'), `
+    <div class="fbar">
+      <div><label>From</label><input type="date" value="${f.from}" onchange="repSet('from', this.value)"></div>
+      <div><label>To</label><input type="date" value="${f.to}" onchange="repSet('to', this.value)"></div>
+      ${selHTML('type','Type', [['Purchase','Purchase'],['Refill','Refill'],['Transfer','Transfer'],['Waste','Waste']], 'All types')}
+      ${selHTML('loc','Location', LISTS.locs(), 'All locations')}
+      ${selHTML('prod','Product', LISTS.prods(), 'All products')}
+      ${selHTML('cat','Category', LISTS.cats(), 'All categories')}
+      ${selHTML('mach','Machine', LISTS.machs(), 'All machines')}
+      ${selHTML('emp','Employee', LISTS.emps(), 'All employees')}
+      ${selHTML('sup','Supplier', LISTS.sups(), 'All suppliers')}
+    </div>
+    <div class="grid g4 mb">
+      ${kpi('Purchased', 'var(--teal)', AED(sum('Purchase')), 'stock received in range')}
+      ${kpi('Refilled to machines', 'var(--green)', AED(sum('Refill')), 'value at sale price')}
+      ${kpi('Waste', 'var(--red)', AED(sum('Waste')), 'written-off cost')}
+      ${kpi('Movements', 'var(--violet)', NUM(rows.length), rows.length > 400 ? 'showing latest 400' : 'all shown')}
+    </div>
+    ${tbl(['Date','Type','Product',['Qty','r'],'Location','Detail','Employee',['Value','r']], body,
+      { empty:'No movements match these filters.' })}`);
+}
+function repCSV(){
+  const rows = [['Date','Type','Product','Category','Qty','Location','Detail','Employee','Value AED']];
+  for (const r of repFiltered()) rows.push([r.date, r.t, nameOf('products', r.product_id),
+    nameOf('categories', rec('products', r.product_id)?.category_id), r.qty,
+    nameOf('locations', r.loc), r.detail, r.emp ? nameOf('employees', r.emp) : '', r.value.toFixed(2)]);
+  dlCSV(rows, 'movements-' + todayStr() + '.csv');
+}
+
+/* ---------------- profit ---------------- */
+function pfRange(kind){
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  const dstr = d => d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+  if (kind==='m')  return { from:firstOfMonth(), to:todayStr() };
+  if (kind==='lm') return { from:dstr(new Date(y, m-1, 1)), to:dstr(new Date(y, m, 0)) };
+  if (kind==='30') return { from:dstr(new Date(Date.now()-29*864e5)), to:todayStr() };
+  return { from:y+'-01-01', to:todayStr() };
+}
+function setPf(kind){ S.f.pf = pfRange(kind); pgProfit(); }
+function pgProfit(){
+  const f = S.f.pf ||= pfRange('m');
+  const inR = d => d >= f.from && d <= f.to;
+  let refRev = 0, refCogs = 0;
+  const byMach = new Map(), byProd = new Map(), byEmp = new Map();
+  for (const it of S.c.issue_items){
+    const i = S.maps.issues.get(it.issue_id); if (!i || !inR(i.date||'')) continue;
+    const rev = it.qty*(+it.unit_price||0), cogs = it.qty*(+it.unit_cost||0);
+    refRev += rev; refCogs += cogs;
+    const m = byMach.get(i.machine_id) || { rev:0, cogs:0, coll:0 }; m.rev += rev; m.cogs += cogs; byMach.set(i.machine_id, m);
+    const p = byProd.get(it.product_id) || { qty:0, rev:0, cogs:0 }; p.qty += +it.qty; p.rev += rev; p.cogs += cogs; byProd.set(it.product_id, p);
+    if (i.employee_id) byEmp.set(i.employee_id, (byEmp.get(i.employee_id)||0) + rev);
+  }
+  let coll = 0;
+  for (const c of S.c.collections){ if (!inR(c.date||'')) continue; coll += +c.amount;
+    const m = byMach.get(c.machine_id) || { rev:0, cogs:0, coll:0 }; m.coll += +c.amount; byMach.set(c.machine_id, m); }
+  const refProfit = refRev - refCogs, collProfit = coll - refCogs;
+  const margin = refRev > 0 ? refProfit/refRev : 0;
+
+  const machRows = [...byMach.entries()].sort((a,b)=>(b[1].coll+b[1].rev)-(a[1].coll+a[1].rev)).map(([id,m])=>{
+    const cp = m.coll - m.cogs;
+    return `<tr><td>${machLabel(id)}</td>
+      <td class="r">${AED(m.rev)}</td><td class="r mut">${AED(m.cogs)}</td>
+      <td class="r ${m.rev-m.cogs>=0?'pos':'neg'}">${AED(m.rev-m.cogs)}</td>
+      <td class="r">${AED(m.coll)}</td>
+      <td class="r bold ${cp>=0?'pos':'neg'}">${AED(cp)}</td></tr>`; });
+  const prodRows = [...byProd.entries()].sort((a,b)=>(b[1].rev-b[1].cogs)-(a[1].rev-a[1].cogs)).map(([id,p])=>{
+    const pr = p.rev - p.cogs, mg = p.rev > 0 ? pr/p.rev : 0;
+    return `<tr><td>${esc(nameOf('products', id))}</td><td class="r">${NUM(p.qty)}</td>
+      <td class="r">${AED(p.rev)}</td><td class="r mut">${AED(p.cogs)}</td>
+      <td class="r bold ${pr>=0?'pos':'neg'}">${AED(pr)}</td><td class="r">${PCT(mg)}</td></tr>`; });
+  const empBars = [...byEmp.entries()].map(([id,v2])=>({l:nameOf('employees', id), v:v2})).sort((a,b)=>b.v-a.v).slice(0,8);
+  const preset = (k, label) => `<button class="btn ghost sm" onclick="setPf('${k}')">${label}</button>`;
+
+  page('Profit', '', `
+    <div class="fbar">
+      ${preset('m','This month')}${preset('lm','Last month')}${preset('30','Last 30 days')}${preset('y','This year')}
+      <div><label>From</label><input type="date" value="${f.from}" onchange="S.f.pf.from=this.value;pgProfit()"></div>
+      <div><label>To</label><input type="date" value="${f.to}" onchange="S.f.pf.to=this.value;pgProfit()"></div>
+    </div>
+    <div class="grid g3 mb">
+      ${kpi('Refill revenue', 'var(--teal)', AED(refRev), 'stock issued to machines, at sale price')}
+      ${kpi('COGS', 'var(--amber)', AED(refCogs), 'FEFO batch cost of issued stock')}
+      ${kpi('Refill profit', refProfit>=0?'var(--green)':'var(--red)', `<span class="${refProfit>=0?'':'neg'}">${AED(refProfit)}</span>`, 'margin ' + PCT(margin))}
+      ${kpi('Collections', 'var(--violet)', AED(coll), 'cash pulled from machines')}
+      ${kpi('Collections profit', collProfit>=0?'var(--green)':'var(--red)', `<span class="${collProfit>=0?'':'neg'}">${AED(collProfit)}</span>`, 'collections − COGS')}
+      ${kpi('Gap', 'var(--teal)', AED(coll - refRev), 'collections vs issued value — shrinkage check')}
+    </div>
+    <div class="mnote mb"><b>Two ways to read profit:</b> “Refill profit” treats stock loaded into a machine as sold. “Collections profit” uses the real cash you collected minus the same COGS. Over time the two should converge — a growing gap means unsold stock sitting in machines, or losses.</div>
+    <div class="sec-title">By machine <span class="coin"></span></div>
+    ${tbl(['Machine',['Refill value','r'],['COGS','r'],['Refill profit','r'],['Collections','r'],['Collections profit','r']], machRows,
+      { empty:'No machine activity in this period.' })}
+    <div class="sec-title">By product <span class="coin"></span></div>
+    ${tbl(['Product',['Qty out','r'],['Revenue','r'],['COGS','r'],['Profit','r'],['Margin','r']], prodRows,
+      { empty:'No products issued in this period.' })}
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card"><h3>By employee <span class="sp">refill value</span></h3>${hbars(empBars)}</div>
+      <div class="card"><h3>Period</h3><div class="mut" style="font-size:13.5px;line-height:1.7">${fmtD(f.from)} → ${fmtD(f.to)}<br>${NUM(machRows.length)} machines · ${NUM(prodRows.length)} products with activity</div></div>
+    </div>`);
+}
+
+/* ---------------- settings ---------------- */
+function pgSettings(){
+  const locRows = S.c.locations.map(l => `<tr style="${l.is_active===false?'opacity:.45':''}">
+    <td class="bold">${esc(l.name)}</td><td class="mut">${esc(l.city||'—')}</td>
+    <td>${l.is_active===false?'<span class="pill p-gray">Inactive</span>':'<span class="pill p-ok">Active</span>'}</td>
+    ${rowBtns(editIB(`locModal('${l.id}')`))}</tr>`);
+  const catRows = S.c.categories.map(c => `<tr><td>${esc(c.name)}</td>
+    ${rowBtns(editIB(`catModal('${c.id}')`), delIB(`delRow('categories','${c.id}','category')`))}</tr>`);
+  page('Settings', '', `
+    <div class="grid g2">
+      <div class="card"><h3>Stock locations <span class="sp"><button class="btn sm ghost" onclick="locModal()">${ic('plus',13)} Add</button></span></h3>
+        ${tbl(['Name','City','Status',''], locRows, { empty:'Add your warehouses.' })}</div>
+      <div class="card"><h3>Product categories <span class="sp"><button class="btn sm ghost" onclick="catModal()">${ic('plus',13)} Add</button></span></h3>
+        ${tbl(['Name',''], catRows, { empty:'Add categories like Coffee, Snacks, Water.' })}</div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>About</h3>
+      <div class="mut" style="font-size:13.5px;line-height:1.8">
+        Doctor Vending Operations Console v1.0 · Currency AED · FEFO stock rotation<br>
+        Install on your phone: open this site in Chrome/Safari → <b>Add to Home Screen</b> for the full-screen PWA.<br>
+        Data lives in your Supabase project — back it up from the Supabase dashboard.
+      </div></div>
+    <div class="card" style="margin-top:16px"><h3>${ic('dl',15)} Backup &amp; restore</h3>
+      <div class="mut" style="font-size:13.5px;line-height:1.7;margin-bottom:14px">
+        Download a full copy of everything as one file, or restore from one if you ever lose data.
+        Keep a copy somewhere safe (Drive, email) every now and then.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="exportBackup()">${ic('dl',15)} Download backup</button>
+        <button class="btn ghost" onclick="importBackup()">${ic('inbox',15)} Restore from file</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;border-color:rgba(240,113,107,.35)">
+      <h3 style="color:var(--red)">${ic('alert',15)} Danger zone</h3>
+      <div class="mut" style="font-size:13.5px;line-height:1.7;margin-bottom:14px">
+        Clears all suppliers, products, machines, employees, purchases, refills, transfers,
+        collections and waste — useful for wiping the demo data before going live.
+        Your locations and categories stay. This can’t be undone.
+      </div>
+      <button class="btn danger" onclick="confirmWipe()">${ic('trash',15)} Reset all data</button>
+    </div>`);
+}
+function confirmWipe(){
+  askConfirm('Permanently delete ALL suppliers, products, machines, employees, and every transaction (purchases, refills, transfers, collections, waste)? Locations and categories stay. This cannot be undone.',
+    wipeData, 'Delete everything');
+}
+async function wipeData(){
+  const order = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machines','products','employees','suppliers'];
+  for (const t of order){
+    const r = await sb.from(t).delete().not('id','is',null);
+    if (r.error) throw r.error;
+  }
+  closeModal(); await refresh(); toast('All data cleared — you’re starting fresh', 'ok');
+}
+
+/* ---------------- backup & restore ---------------- */
+function exportBackup(){
+  const payload = { app:'doctor-vending', version:1, exported_at:new Date().toISOString(), data:{} };
+  for (const t of TABLES) payload.data[t] = S.c[t] || [];
+  const total = TABLES.reduce((n,t)=>n + payload.data[t].length, 0);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload)], {type:'application/json'}));
+  a.download = 'doctor-vending-backup-' + todayStr() + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('Backup downloaded · ' + NUM(total) + ' records', 'ok');
+}
+function importBackup(){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = () => { if (inp.files[0]) readBackup(inp.files[0]); };
+  inp.click();
+}
+async function readBackup(file){
+  let payload;
+  try { payload = JSON.parse(await file.text()); }
+  catch { return toast('That file isn’t a valid backup', 'err'); }
+  if (payload.app !== 'doctor-vending' || !payload.data) return toast('That file isn’t a Doctor Vending backup', 'err');
+  const total = TABLES.reduce((n,t)=>n + ((payload.data[t]||[]).length), 0);
+  openModal('Restore backup', `
+    <div class="mnote">From <b>${esc((payload.exported_at||'').slice(0,10) || 'unknown date')}</b> · ${NUM(total)} records.</div>
+    <p style="color:var(--muted);line-height:1.6;padding-bottom:6px">This <b>erases all current data</b> and replaces it with the backup. This can’t be undone.</p>`,
+    { saveLabel:'Erase & restore', danger:true, onSave: () => doRestore(payload) });
+}
+async function insertAll(table, rows){
+  if (!rows || !rows.length) return;
+  const chunk = 400;
+  for (let i = 0; i < rows.length; i += chunk){
+    const r = await sb.from(table).insert(rows.slice(i, i+chunk));
+    if (r.error) throw r.error;
+  }
+}
+async function doRestore(payload){
+  const clearOrder  = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machines','products','employees','suppliers','categories','locations'];
+  const insertOrder = ['locations','categories','suppliers','employees','products','machines','purchases','transfers','batches','issues','issue_items','transfer_items','collections','adjustments'];
+  for (const t of clearOrder){ const r = await sb.from(t).delete().not('id','is',null); if (r.error) throw r.error; }
+  for (const t of insertOrder) await insertAll(t, payload.data[t]);
+  closeModal(); await refresh(); toast('Backup restored', 'ok');
+}
+function locModal(id){
+  const l = id ? rec('locations', id) : {};
+  openModal(id ? 'Edit location' : 'Add location', `
+    <div class="frow">${F.inp('lName','Name',{req:true,val:l.name||''})}${F.inp('lCity','City / Emirate',{val:l.city||''})}</div>
+    ${id?`<label class="chk"><input type="checkbox" id="lAct" ${l.is_active!==false?'checked':''}> Active</label>`:''}`,
+    { onSave: async () => {
+      if (!v('lName')) throw Error('Name is required');
+      const row = { name:v('lName'), city:v('lCity')||null };
+      if (id) row.is_active = $('lAct').checked;
+      const r = id ? await sb.from('locations').update(row).eq('id', id) : await sb.from('locations').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast('Saved', 'ok');
+    }});
+}
+function catModal(id){
+  const c = id ? rec('categories', id) : {};
+  openModal(id ? 'Edit category' : 'Add category',
+    `<div class="f1">${F.inp('cName','Name',{req:true,val:c.name||''})}</div>`,
+    { onSave: async () => {
+      if (!v('cName')) throw Error('Name is required');
+      const r = id ? await sb.from('categories').update({name:v('cName')}).eq('id', id)
+                   : await sb.from('categories').insert({name:v('cName')});
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast('Saved', 'ok');
+    }});
+}
+
+/* ---------------- router & init ---------------- */
+const PAGES = {
+  dashboard:pgDashboard, inventory:pgInventory, profit:pgProfit, reports:pgReports,
+  purchases:pgPurchases, refills:pgRefills, collections:pgCollections, transfers:pgTransfers,
+  products:pgProducts, machines:pgMachines, suppliers:pgSuppliers, employees:pgEmployees, settings:pgSettings
+};
+boot();
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>

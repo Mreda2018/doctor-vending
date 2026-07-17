@@ -1,0 +1,16 @@
+{
+  "name": "Doctor Vending — Operations",
+  "short_name": "Dr Vending",
+  "description": "Inventory, refills, collections & profit for Doctor Vending",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B1014",
+  "theme_color": "#0B1014",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "./icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
