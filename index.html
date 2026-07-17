@@ -229,12 +229,36 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
   #pgTitle{font-size:20px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}}
+
+/* ---------- print / PDF ---------- */
+#printArea{display:none}
+@media print{
+  body{background:#fff!important;background-image:none!important}
+  #app,#auth,#splash,#modal,#toasts,#scrim{display:none!important}
+  #printArea{display:block;color:#000;font-family:var(--ui);font-size:12px}
+  #printArea .phead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0FACC5;padding-bottom:10px;margin-bottom:16px}
+  #printArea .pb1{font-family:var(--disp);color:#0FACC5;font-size:14px;font-style:italic}
+  #printArea .pb2{font-family:var(--disp);font-size:22px;color:#000;letter-spacing:.04em}
+  #printArea .pcoin{display:inline-block;width:8px;height:8px;border-radius:50%;background:#0FACC5;margin-left:4px}
+  #printArea h1{font-size:19px;margin:0 0 4px;color:#000}
+  #printArea .psub{color:#555;font-size:11.5px}
+  #printArea table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px}
+  #printArea th{background:#eef6f8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left;color:#123}
+  #printArea th,#printArea td{border:1px solid #bbb;padding:5px 7px}
+  #printArea .pill{border:1px solid #999;border-radius:8px;padding:1px 6px;background:none;color:#000}
+  #printArea .pill::before{display:none}
+  #printArea .twrap{border:0;background:none;overflow:visible}
+  #printArea .mut{color:#555}
+  #printArea .pos{color:#0a7d4f}#printArea .neg{color:#b3423c}
+  #printArea .r{text-align:right}
+  #printArea tr{page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
 <style>
-.pl-line{grid-template-columns:2.2fr .7fr .9fr 1.1fr auto}
-.rf-line{grid-template-columns:2.4fr .7fr .9fr auto}
+.pl-line{grid-template-columns:2fr .6fr .6fr .8fr 1fr auto}
+.rf-line{grid-template-columns:2.2fr .6fr .6fr .8fr auto}
 .tr-line{grid-template-columns:2.6fr .8fr auto}
 @media(max-width:640px){.pl-line,.rf-line,.tr-line{grid-template-columns:1fr 1fr}.line .full{grid-column:1/-1}}
 </style>
@@ -304,6 +328,7 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
 </div>
 
 <div id="toasts" aria-live="polite"></div>
+<div id="printArea"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
@@ -312,13 +337,13 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
    1) Create a Supabase project  2) Run schema.sql  3) Paste keys below
    ================================================================ */
 const CONFIG = {
-  SUPABASE_URL: "https://uedtnznhoybvdquqphnz.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZHRuem5ob3lidmRxdXFwaG56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyNDg3MzEsImV4cCI6MjA5OTgyNDczMX0.rO31lK4tCZPezhI37PgRXitEh4JAQj_exXs82UzxW9k"
+  SUPABASE_URL: "PASTE_YOUR_SUPABASE_URL",
+  SUPABASE_ANON_KEY: "PASTE_YOUR_SUPABASE_ANON_KEY"
 };
 
 /* ---------------- state & helpers ---------------- */
 let sb = null;
-const TABLES = ['locations','categories','suppliers','products','employees','machines',
+const TABLES = ['locations','categories','suppliers','products','employees',
   'purchases','batches','issues','issue_items','transfers','transfer_items','collections','adjustments'];
 const S = { page:'dashboard', c:{}, maps:{}, f:{} };
 
@@ -367,8 +392,13 @@ const ic = (n, s=18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" sty
 function rebuildMaps(){ S.maps = {}; for (const t of TABLES) S.maps[t] = new Map((S.c[t]||[]).map(r => [r.id, r])); }
 const rec = (t,id) => S.maps[t]?.get(id) || null;
 const nameOf = (t,id) => { const r = rec(t,id); return r ? (r.name || r.code || '—') : '—'; };
-const machLabel = id => { const m = rec('machines', id); if (!m) return '—';
-  return esc([m.code, m.name].filter(Boolean).join(' · ') + (m.site ? ' — ' + m.site : '')); };
+const upcOf = pid => Math.max(1, +(rec('products', pid)?.units_per_carton || 1));
+const fmtQty = (pid, qty) => { qty = +qty || 0; const u = upcOf(pid);
+  if (u <= 1) return NUM(qty);
+  const c = Math.floor(qty / u), p = r4(qty - c*u);
+  return (c ? NUM(c) + ' ctn' + (p ? ' + ' + NUM(p) + ' pc' : '') : NUM(p) + ' pc') + ' <span class="mut">(' + NUM(qty) + ')</span>'; };
+const lineQty = line => { const c = +line.querySelector('.lqc').value || 0, p = +line.querySelector('.lq').value || 0,
+  pid = line.querySelector('.lp').value; return r4(c * (pid ? upcOf(pid) : 1) + p); };
 const activeLocs = () => (S.c.locations||[]).filter(l => l.is_active !== false);
 const activeProds = () => (S.c.products||[]).filter(p => p.is_active !== false).sort((a,b)=>a.name.localeCompare(b.name));
 
@@ -382,7 +412,6 @@ async function loadAll(){
   S.c.batches.sort((a,b) => ((a.expiry_date||'9999')+'').localeCompare((b.expiry_date||'9999')+''));
   S.c.products.sort((a,b) => a.name.localeCompare(b.name));
   for (const t of ['suppliers','employees','locations','categories']) S.c[t].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  S.c.machines.sort((a,b) => (a.code||a.name||'').localeCompare(b.code||b.name||''));
   rebuildMaps();
 }
 async function refresh(){ await loadAll(); PAGES[S.page](); }
@@ -457,7 +486,6 @@ const LISTS = {
   prods: () => activeProds().map(p=>[p.id, p.name]),
   sups:  () => S.c.suppliers.map(s=>[s.id, s.name]),
   emps:  () => S.c.employees.filter(e=>e.is_active!==false).map(e=>[e.id, e.name]),
-  machs: () => S.c.machines.map(m=>[m.id, [m.code,m.name].filter(Boolean).join(' · ') + (m.site?' — '+m.site:'')]),
   cats:  () => S.c.categories.map(c=>[c.id, c.name])
 };
 
@@ -504,7 +532,7 @@ function chartBars(months){
     s += `<text x="${x+32}" y="${base+27}" font-size="11" text-anchor="middle">${m.label}</text>`;
   });
   s += `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="#283B46"/></svg></div>`;
-  s += '<div class="legend"><span><i style="background:#0FACC5"></i>Refill profit</span><span><i style="background:#2BD1E8;opacity:.5"></i>Collections profit</span></div>';
+  s += '<div class="legend"><span><i style="background:#0FACC5"></i>Stock-out profit</span><span><i style="background:#2BD1E8;opacity:.5"></i>Collections profit</span></div>';
   return s;
 }
 function donut(items){
@@ -553,8 +581,8 @@ async function signOut(){ if (sb) await sb.auth.signOut(); location.reload(); }
 
 const NAV = [
   ['Overview',   [['dashboard','Dashboard','grid'], ['inventory','Inventory','box'], ['profit','Profit','coins'], ['reports','Reports','doc']]],
-  ['Operations', [['purchases','Purchases','inbox'], ['refills','Refills','truck'], ['collections','Collections','cash'], ['transfers','Transfers','swap']]],
-  ['Catalog',    [['products','Products','tag'], ['machines','Machines','machine'], ['suppliers','Suppliers','factory'], ['employees','Employees','user']]],
+  ['Operations', [['purchases','Stock In','inbox'], ['refills','Stock Out','truck'], ['collections','Collections','cash'], ['transfers','Transfers','swap']]],
+  ['Catalog',    [['products','Products','tag'], ['suppliers','Suppliers','factory'], ['employees','Employees','user']]],
   ['System',     [['settings','Settings','cog']]]
 ];
 function buildNav(){
@@ -597,9 +625,9 @@ function activityFeed(){
   for (const p of S.c.purchases.slice(0,15)) ev.push({t:p.created_at, c:'var(--teal)',
     txt:`Stock received${p.ref_no ? ' · '+esc(p.ref_no) : ''} from <b>${esc(nameOf('suppliers',p.supplier_id))}</b> → ${esc(nameOf('locations',p.location_id))}`});
   for (const i of S.c.issues.slice(0,15)){ const val = issueValue(i.id);
-    ev.push({t:i.created_at, c:'var(--green)', txt:`<b>${esc(nameOf('employees',i.employee_id))}</b> refilled ${machLabel(i.machine_id)} · ${AED(val.rev)}`}); }
+    ev.push({t:i.created_at, c:'var(--green)', txt:`<b>${esc(nameOf('employees',i.employee_id))}</b> took stock from ${esc(nameOf('locations',i.location_id))} · ${AED(val.rev)}`}); }
   for (const c of S.c.collections.slice(0,15)) ev.push({t:c.created_at, c:'var(--violet)',
-    txt:`Collected <b>${AED(c.amount)}</b> from ${machLabel(c.machine_id)}`});
+    txt:`Collected <b>${AED(c.amount)}</b> from ${esc(nameOf('employees',c.employee_id))}`});
   for (const a of S.c.adjustments.slice(0,15)) ev.push({t:a.created_at, c:'var(--red)',
     txt:`Waste · ${NUM(a.qty)} × ${esc(nameOf('products',a.product_id))} <span class="mut">(${esc(a.reason||'')})</span>`});
   return ev.filter(e=>e.t).sort((a,b)=>b.t.localeCompare(a.t)).slice(0,8);
@@ -632,12 +660,12 @@ function pgDashboard(){
   const top = [...topMap.entries()].map(([id,v])=>({l:nameOf('products',id), v}))
     .sort((a,b)=>b.v-a.v).slice(0,6);
 
-  page('Dashboard', ghostBtn('New refill', "go('refills');setTimeout(newRefill,50)", 'truck'), `
+  page('Dashboard', ghostBtn('New stock out', "go('refills');setTimeout(newRefill,50)", 'truck'), `
     <div class="grid g3 mb">
       ${kpi('Stock value', 'var(--teal)', AED(stockVal), NUM(S.c.batches.filter(b=>+b.qty_remaining>0).length)+' live batches')}
-      ${kpi('Refill profit — this month', 'var(--green)', AED(refProfit), AED(refRev)+' issued to machines')}
+      ${kpi('Stock-out profit — this month', 'var(--green)', AED(refProfit), AED(refRev)+' taken at sale price')}
       ${kpi('Collections — this month', 'var(--violet)', AED(coll), NUM(S.c.collections.filter(c=>c.date>=mS).length)+' collections')}
-      ${kpi('Collections profit', collProfit>=0?'var(--green)':'var(--red)', `<span class="${collProfit>=0?'':'neg'}">${AED(collProfit)}</span>`, 'collections − refill COGS')}
+      ${kpi('Collections profit', collProfit>=0?'var(--green)':'var(--red)', `<span class="${collProfit>=0?'':'neg'}">${AED(collProfit)}</span>`, 'collections − stock-out COGS')}
       ${kpi('Expiring ≤ 30 days', 'var(--amber)', NUM(expSoonQ)+' <span style="font-size:15px">units</span>', expiredQ>0 ? `<span class="neg">${NUM(expiredQ)} already expired</span>` : 'nothing expired')}
       ${kpi('Low stock products', low>0?'var(--red)':'var(--green)', NUM(low), 'at or below minimum level')}
     </div>
@@ -646,7 +674,7 @@ function pgDashboard(){
       <div class="card"><h3>Stock value by location</h3>${donut(locVals)}</div>
     </div>
     <div class="grid g2">
-      <div class="card"><h3>Top products <span class="sp">refill revenue · 30 days</span></h3>${hbars(top)}</div>
+      <div class="card"><h3>Top products <span class="sp">stock-out revenue · 30 days</span></h3>${hbars(top)}</div>
       <div class="card"><h3>Latest activity</h3>${
         activityFeed().map(e=>`<div class="act"><span class="dot" style="background:${e.c}"></span><span>${e.txt}</span><span class="when">${timeAgo(e.t)}</span></div>`).join('')
         || '<div class="mut" style="font-size:13.5px">Activity will appear here as you work.</div>'}</div>
@@ -677,7 +705,7 @@ function pgInventory(){
       <td><span class="bold">${esc(p.name)}</span>${p.sku?` <span class="mut">· ${esc(p.sku)}</span>`:''}${tags?`<div style="margin-top:3px">${tags}</div>`:''}</td>
       <td class="mut">${esc(nameOf('categories', p.category_id))}</td>
       ${locs.map(l=>`<td class="r">${e.locs[l.id] ? NUM(e.locs[l.id]) : '<span class="mut">—</span>'}</td>`).join('')}
-      <td class="r bold">${NUM(e.total)}</td>
+      <td class="r bold">${fmtQty(p.id, e.total)}</td>
       <td class="r">${AED(e.val)}</td>
       <td>${stPill(status)}</td>
       ${rowBtns(viewIB(`batchesModal('${p.id}')`))}
@@ -772,21 +800,25 @@ function pgPurchases(){
       <td>${esc(nameOf('suppliers', p.supplier_id))}</td><td class="mut">${esc(nameOf('locations', p.location_id))}</td>
       <td class="r">${t.items}</td><td class="r bold">${AED(t.cost)}</td>
       ${rowBtns(viewIB(`viewPurchase('${p.id}')`), delIB(`delPurchase('${p.id}')`))}</tr>`; });
-  page('Purchases', addBtn('Receive stock', 'newPurchase()'),
+  page('Stock In', addBtn('Receive stock', 'newPurchase()'),
+    `<div class="mnote mb">Goods coming in from a <b>supplier</b> into a warehouse. Each line can have its own expiry date — same product across several lines = several expiry dates.</div>` +
     tbl(['Date','Ref','Supplier','To location',['Lines','r'],['Total cost','r'],''], rows,
-      { empty:'No purchases yet. Receive your first delivery to create stock batches.', emptyBtn: addBtn('Receive stock','newPurchase()') }));
+      { empty:'No stock received yet. Record your first supplier delivery.', emptyBtn: addBtn('Receive stock','newPurchase()') }));
 }
 function purLineHTML(){
   return `<div class="line pl-line">
-    <div class="full"><label>Product</label><select class="lp" required onchange="purProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
-    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal"></div>
-    <div><label>Unit cost</label><input class="lc" type="number" min="0" step="any" inputmode="decimal"></div>
+    <div class="full"><label>Product</label><select class="lp" required onchange="purProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
+    <div><label>Cartons</label><input class="lqc" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+    <div><label>Pieces</label><input class="lq" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+    <div><label>Cost / pc</label><input class="lc" type="number" min="0" step="any" inputmode="decimal"></div>
     <div><label>Expiry</label><input class="le" type="date"></div>
     <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
   </div>`;
 }
-function purProd(sel){ const p = rec('products', sel.value);
-  if (p) sel.closest('.line').querySelector('.lc').value = +p.cost_price || ''; }
+function purProd(sel){ const p = rec('products', sel.value), line = sel.closest('.line');
+  if (p) line.querySelector('.lc').value = +p.cost_price || '';
+  const u = p ? Math.max(1, +p.units_per_carton||1) : 1;
+  line.querySelector('.hint').innerHTML = u > 1 ? `1 carton = <b>${NUM(u)}</b> pieces` : ''; }
 function addPurLine(){ $('plines').insertAdjacentHTML('beforeend', purLineHTML()); }
 function newPurchase(){
   openModal('Receive stock', `
@@ -800,7 +832,7 @@ function newPurchase(){
     <button type="button" class="btn ghost sm" onclick="addPurLine()">${ic('plus',14)} Add line</button>
     ${F.area('pNotes','Notes')}`, { wide:true, saveLabel:'Receive', onSave: async () => {
       const lines = [...document.querySelectorAll('#plines .line')].map(r => ({
-        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value,
+        product_id: r.querySelector('.lp').value, qty: lineQty(r),
         cost: +r.querySelector('.lc').value || 0, exp: r.querySelector('.le').value || null }));
       if (!lines.length) throw Error('Add at least one line');
       for (const l of lines) if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
@@ -838,21 +870,22 @@ function delPurchase(id){
 /* ---------------- refills (issues) ---------------- */
 function pgRefills(){
   const rows = S.c.issues.map(i => { const val = issueValue(i.id); const profit = val.rev - val.cogs;
-    return `<tr><td class="mut">${fmtD(i.date)}</td><td>${esc(nameOf('employees', i.employee_id))}</td>
-      <td>${machLabel(i.machine_id)}</td><td class="mut">${esc(nameOf('locations', i.location_id))}</td>
+    return `<tr><td class="mut">${fmtD(i.date)}</td><td class="bold">${esc(nameOf('employees', i.employee_id))}</td>
+      <td class="mut">${esc(nameOf('locations', i.location_id))}</td>
       <td class="r">${AED(val.rev)}</td><td class="r mut">${AED(val.cogs)}</td>
       <td class="r bold ${profit>=0?'pos':'neg'}">${AED(profit)}</td>
       ${rowBtns(viewIB(`viewRefill('${i.id}')`), delIB(`delRefill('${i.id}')`))}</tr>`; });
-  page('Refills', addBtn('New refill', 'newRefill()'),
-    `<div class="mnote mb">A refill moves stock from a location into a machine — earliest expiry goes first (FEFO). Its value at sale price is your first profit basis.</div>` +
-    tbl(['Date','Employee','Machine','From',['Value','r'],['Cost','r'],['Profit','r'],''], rows,
-      { empty:'No refills yet. Record what an employee loads into a machine.', emptyBtn: addBtn('New refill','newRefill()') }));
+  page('Stock Out', addBtn('New stock out', 'newRefill()'),
+    `<div class="mnote mb">Stock an <b>employee</b> takes from a warehouse — earliest expiry goes out first (FEFO), across multiple expiry dates if needed. Its value at sale price is your first profit basis.</div>` +
+    tbl(['Date','Employee','From location',['Value','r'],['Cost','r'],['Profit','r'],''], rows,
+      { empty:'No stock outs yet. Record what an employee takes.', emptyBtn: addBtn('New stock out','newRefill()') }));
 }
 function refLineHTML(){
   return `<div class="line rf-line">
     <div class="full"><label>Product</label><select class="lp" required onchange="refProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
-    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal" oninput="refHint(this.closest('.line'))"></div>
-    <div><label>Unit price</label><input class="ls" type="number" min="0" step="any" inputmode="decimal"></div>
+    <div><label>Cartons</label><input class="lqc" type="number" min="0" step="any" inputmode="decimal" placeholder="0" oninput="refHint(this.closest('.line'))"></div>
+    <div><label>Pieces</label><input class="lq" type="number" min="0" step="any" inputmode="decimal" placeholder="0" oninput="refHint(this.closest('.line'))"></div>
+    <div><label>Price / pc</label><input class="ls" type="number" min="0" step="any" inputmode="decimal"></div>
     <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
   </div>`;
 }
@@ -864,28 +897,25 @@ function refProd(sel){
 function refHint(line){
   const pid = line.querySelector('.lp').value, loc = v('rLoc'), h = line.querySelector('.hint');
   if (!pid || !loc){ h.innerHTML = ''; return; }
-  const av = availAt(pid, loc), q = +line.querySelector('.lq').value || 0;
-  h.innerHTML = `Available: <b>${NUM(av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+  const av = availAt(pid, loc), q = lineQty(line);
+  h.innerHTML = `Available: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
 }
 function refLocChange(){ document.querySelectorAll('#rlines .line').forEach(refHint); }
-function refMach(sel){ const m = rec('machines', sel.value);
-  if (m && m.location_id) $('rLoc').value = m.location_id; refLocChange(); }
 function addRefLine(){ $('rlines').insertAdjacentHTML('beforeend', refLineHTML()); }
 function newRefill(){
-  openModal('New refill', `
+  openModal('New stock out', `
     <div class="frow f3">
       ${F.inp('rDate','Date',{type:'date',val:todayStr(),req:true})}
       ${F.sel('rEmp','Employee', LISTS.emps(), '', {req:true, emptyLabel:'Choose…'})}
-      ${F.sel('rMach','Machine', LISTS.machs(), '', {req:true, emptyLabel:'Choose…', onch:'refMach(this)'})}
+      ${F.sel('rLoc','From location', LISTS.locs(), '', {req:true, emptyLabel:'Choose…', onch:'refLocChange()'})}
     </div>
-    <div class="frow">${F.sel('rLoc','From location', LISTS.locs(), '', {req:true, emptyLabel:'Choose…', onch:'refLocChange()'})}<div></div></div>
     <div id="rlines">${refLineHTML()}</div>
     <button type="button" class="btn ghost sm" onclick="addRefLine()">${ic('plus',14)} Add line</button>
-    ${F.area('rNotes','Notes')}`, { wide:true, saveLabel:'Save refill', onSave: async () => {
+    ${F.area('rNotes','Notes')}`, { wide:true, saveLabel:'Save stock out', onSave: async () => {
       const loc = v('rLoc');
-      if (!loc || !v('rEmp') || !v('rMach')) throw Error('Employee, machine and location are required');
+      if (!loc || !v('rEmp')) throw Error('Employee and location are required');
       const lines = [...document.querySelectorAll('#rlines .line')].map(r => ({
-        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value, price: +r.querySelector('.ls').value || 0 }));
+        product_id: r.querySelector('.lp').value, qty: lineQty(r), price: +r.querySelector('.ls').value || 0 }));
       if (!lines.length) throw Error('Add at least one line');
       const work = new Map(), allocs = [];
       for (const l of lines){
@@ -896,7 +926,7 @@ function newRefill(){
         allocs.push({ l, picks, cost });
       }
       const { data, error } = await sb.from('issues').insert({ date:v('rDate')||todayStr(), employee_id:v('rEmp'),
-        machine_id:v('rMach'), location_id:loc, notes:v('rNotes')||null }).select().single();
+        location_id:loc, notes:v('rNotes')||null }).select().single();
       if (error) throw error;
       const items = allocs.map(a => ({ issue_id:data.id, product_id:a.l.product_id, qty:a.l.qty,
         unit_cost:r4(a.cost), unit_price:a.l.price, alloc:a.picks.map(p=>({b:p.b.id, q:p.t})) }));
@@ -904,24 +934,28 @@ function newRefill(){
       if (r2.error){ await sb.from('issues').delete().eq('id', data.id); throw r2.error; }
       for (const [bid, remain] of work){ const r3 = await sb.from('batches').update({ qty_remaining:r4(remain) }).eq('id', bid);
         if (r3.error) throw r3.error; }
-      closeModal(); await refresh(); toast('Refill saved — stock moved to machine', 'ok');
+      closeModal(); await refresh(); toast('Stock out saved', 'ok');
     }});
 }
 function viewRefill(id){
   const i = rec('issues', id), val = issueValue(id);
-  const rows = S.c.issue_items.filter(x => x.issue_id === id).map(x => `<tr>
-    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${NUM(x.qty)}</td>
-    <td class="r">${AED(x.unit_price)}</td><td class="r mut">${AED(x.unit_cost)}</td>
+  const rows = S.c.issue_items.filter(x => x.issue_id === id).map(x => {
+    const exps = (x.alloc||[]).map(a => { const b = rec('batches', a.b);
+      return NUM(a.q) + ' × ' + (b && b.expiry_date ? fmtD(b.expiry_date) : 'no expiry'); }).join('<br>');
+    return `<tr>
+    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${fmtQty(x.product_id, x.qty)}</td>
+    <td style="font-size:12px" class="mut">${exps||'—'}</td>
+    <td class="r">${AED(x.unit_price)}</td>
     <td class="r">${AED(x.qty*x.unit_price)}</td>
-    <td class="r ${x.unit_price-x.unit_cost>=0?'pos':'neg'}">${AED(x.qty*(x.unit_price-x.unit_cost))}</td></tr>`).join('');
-  openModal('Refill — ' + fmtD(i.date), `
-    <div class="mnote">${esc(nameOf('employees',i.employee_id))} → ${machLabel(i.machine_id)} · from ${esc(nameOf('locations',i.location_id))}${i.notes?'<br>'+esc(i.notes):''}</div>
-    <div class="twrap"><table class="tbl" style="min-width:560px"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Cost</th><th class="r">Value</th><th class="r">Profit</th></tr></thead>
+    <td class="r ${x.unit_price-x.unit_cost>=0?'pos':'neg'}">${AED(x.qty*(x.unit_price-x.unit_cost))}</td></tr>`; }).join('');
+  openModal('Stock out — ' + fmtD(i.date), `
+    <div class="mnote"><b>${esc(nameOf('employees',i.employee_id))}</b> took from ${esc(nameOf('locations',i.location_id))}${i.notes?'<br>'+esc(i.notes):''}</div>
+    <div class="twrap"><table class="tbl" style="min-width:600px"><thead><tr><th>Product</th><th class="r">Qty</th><th>Expiry breakdown</th><th class="r">Price</th><th class="r">Value</th><th class="r">Profit</th></tr></thead>
     <tbody>${rows}</tbody><tbody class="tfoot"><tr><td colspan="4" style="text-align:right">Totals</td><td class="r">${AED(val.rev)}</td><td class="r">${AED(val.rev-val.cogs)}</td></tr></tbody></table></div>
     <div style="height:10px"></div>`, { wide:true });
 }
 function delRefill(id){
-  askConfirm('Delete this refill? The stock goes back to its source batches.', async () => {
+  askConfirm('Delete this stock out? The stock goes back to its source batches.', async () => {
     for (const it of S.c.issue_items.filter(x => x.issue_id === id)){
       for (const a of (it.alloc || [])){
         const b = rec('batches', a.b); if (!b) continue;
@@ -930,7 +964,7 @@ function delRefill(id){
       }
     }
     const r2 = await sb.from('issues').delete().eq('id', id); if (r2.error) throw r2.error;
-    closeModal(); await refresh(); toast('Refill deleted — stock restored', 'ok');
+    closeModal(); await refresh(); toast('Stock out deleted — stock restored', 'ok');
   });
 }
 </script>
@@ -938,13 +972,14 @@ function delRefill(id){
 /* ---------------- collections ---------------- */
 function pgCollections(){
   const rows = S.c.collections.map(c => `<tr><td class="mut">${fmtD(c.date)}</td>
-    <td>${machLabel(c.machine_id)}</td><td class="mut">${esc(nameOf('employees', c.employee_id))}</td>
+    <td class="bold">${esc(nameOf('employees', c.employee_id))}</td>
+    <td class="mut">${esc(c.location_id ? nameOf('locations', c.location_id) : '—')}</td>
     <td class="r bold">${AED(c.amount)}</td><td class="mut">${esc(c.notes||'')}</td>
     ${rowBtns(editIB(`collModal('${c.id}')`), delIB(`delColl('${c.id}')`))}</tr>`);
   page('Collections', addBtn('Record collection', 'collModal()'),
-    `<div class="mnote mb">Cash actually collected from each machine — your second profit basis, compared against refill cost.</div>` +
-    tbl(['Date','Machine','Employee',['Amount','r'],'Notes',''], rows,
-      { empty:'No collections yet. Record the cash you pull from a machine.', emptyBtn: addBtn('Record collection','collModal()') }));
+    `<div class="mnote mb">Cash handed in by an <b>employee</b> from the products they took — your second profit basis, compared against stock-out cost.</div>` +
+    tbl(['Date','Employee','Location',['Amount','r'],'Notes',''], rows,
+      { empty:'No collections yet. Record the cash an employee hands in.', emptyBtn: addBtn('Record collection','collModal()') }));
 }
 function collModal(id){
   const c = id ? rec('collections', id) : {};
@@ -954,13 +989,13 @@ function collModal(id){
       ${F.inp('cAmt','Amount (AED)',{type:'number',min:0,step:'any',req:true,val:c.amount??''})}
     </div>
     <div class="frow">
-      ${F.sel('cMach','Machine', LISTS.machs(), c.machine_id, {req:true, emptyLabel:'Choose…'})}
-      ${F.sel('cEmp','Collected by', LISTS.emps(), c.employee_id)}
+      ${F.sel('cEmp','Employee', LISTS.emps(), c.employee_id, {req:true, emptyLabel:'Choose…'})}
+      ${F.sel('cLoc','Location (optional)', LISTS.locs(), c.location_id)}
     </div>
     ${F.area('cNotes','Notes', c.notes||'')}`, { onSave: async () => {
-      if (!v('cMach')) throw Error('Choose a machine');
+      if (!v('cEmp')) throw Error('Choose the employee');
       if (!(n_('cAmt') >= 0)) throw Error('Enter the amount');
-      const row = { date:v('cDate')||todayStr(), machine_id:v('cMach'), employee_id:v('cEmp')||null,
+      const row = { date:v('cDate')||todayStr(), employee_id:v('cEmp'), location_id:v('cLoc')||null,
         amount:n_('cAmt'), notes:v('cNotes')||null };
       const r = id ? await sb.from('collections').update(row).eq('id', id) : await sb.from('collections').insert(row);
       if (r.error) throw r.error;
@@ -1002,7 +1037,7 @@ function trHint(line){
   const pid = line.querySelector('.lp').value, loc = v('tFrom'), h = line.querySelector('.hint');
   if (!pid || !loc){ h.innerHTML = ''; return; }
   const av = availAt(pid, loc), q = +line.querySelector('.lq').value || 0;
-  h.innerHTML = `Available: <b>${NUM(av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+  h.innerHTML = `Available: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
 }
 function trFromChange(){ document.querySelectorAll('#tlines .line').forEach(trHint); }
 function addTrLine(){ $('tlines').insertAdjacentHTML('beforeend', trLineHTML()); }
@@ -1085,14 +1120,15 @@ function pgProducts(){
       <td><span class="bold">${esc(p.name)}</span>${p.sku?` <span class="mut">· ${esc(p.sku)}</span>`:''}</td>
       <td class="mut">${esc(nameOf('categories', p.category_id))}</td>
       <td class="mut">${esc(p.unit||'pc')}</td>
+      <td class="r">${(+p.units_per_carton||1) > 1 ? NUM(p.units_per_carton)+' pc' : '—'}</td>
       <td class="r">${AED(p.cost_price)}</td><td class="r">${AED(p.sale_price)}</td>
       <td class="r ${margin>=0?'pos':'neg'}">${PCT(margin)}</td>
-      <td class="r">${NUM(e?e.total:0)}</td>
+      <td class="r">${fmtQty(p.id, e?e.total:0)}</td>
       <td>${p.is_active===false?'<span class="pill p-gray">Inactive</span>':'<span class="pill p-teal">Active</span>'}</td>
       ${rowBtns(editIB(`productModal('${p.id}')`), delIB(`delRow('products','${p.id}','product')`))}</tr>`; });
   page('Products', addBtn('Add product', 'productModal()'),
-    tbl(['Product','Category','Unit',['Cost','r'],['Sale','r'],['Margin','r'],['Stock','r'],'Status',''], rows,
-      { empty:'No products yet — add coffee beans, snacks, water and everything your machines sell.', emptyBtn: addBtn('Add product','productModal()') }));
+    tbl(['Product','Category','Unit',['Carton','r'],['Cost / pc','r'],['Sale / pc','r'],['Margin','r'],['Stock','r'],'Status',''], rows,
+      { empty:'No products yet — add coffee beans, snacks, water and everything you sell.', emptyBtn: addBtn('Add product','productModal()') }));
 }
 function productModal(id){
   const p = id ? rec('products', id) : {};
@@ -1100,53 +1136,46 @@ function productModal(id){
     <div class="frow">${F.inp('prName','Name',{req:true,val:p.name||''})}${F.inp('prSku','SKU / code',{val:p.sku||''})}</div>
     <div class="frow">${F.sel('prCat','Category', LISTS.cats(), p.category_id)}${F.inp('prUnit','Unit',{val:p.unit||'pc',ph:'pc, kg, bottle…'})}</div>
     <div class="frow f3">
-      ${F.inp('prCost','Cost price (AED)',{type:'number',min:0,step:'any',val:p.cost_price??''})}
-      ${F.inp('prSale','Sale price (AED)',{type:'number',min:0,step:'any',val:p.sale_price??''})}
-      ${F.inp('prMin','Min stock',{type:'number',min:0,step:'any',val:p.min_stock??0})}
+      ${F.inp('prCost','Cost / pc (AED)',{type:'number',min:0,step:'any',val:p.cost_price??''})}
+      ${F.inp('prSale','Sale / pc (AED)',{type:'number',min:0,step:'any',val:p.sale_price??''})}
+      ${F.inp('prMin','Min stock (pc)',{type:'number',min:0,step:'any',val:p.min_stock??0})}
     </div>
-    ${id?`<label class="chk"><input type="checkbox" id="prAct" ${p.is_active!==false?'checked':''}> Active</label>`:''}`,
+    <div class="frow">
+      ${F.inp('prUpc','Pieces per carton',{type:'number',min:1,step:'any',val:p.units_per_carton??1})}
+      <div></div>
+    </div>
+    ${id?`<label class="chk"><input type="checkbox" id="prAct" ${p.is_active!==false?'checked':''}> Active</label>`
+       :`<div class="mnote">Opening stock (optional) — add a starting quantity with its expiry date. You can add more expiry dates later via Stock In.</div>
+    <div class="frow f3">
+      ${F.sel('prLoc','Location', LISTS.locs())}
+      ${F.inp('prQc','Cartons',{type:'number',min:0,step:'any',ph:'0'})}
+      ${F.inp('prQp','Pieces',{type:'number',min:0,step:'any',ph:'0'})}
+    </div>
+    <div class="frow">
+      ${F.inp('prExp','Expiry date',{type:'date'})}
+      <div></div>
+    </div>`}`,
     { onSave: async () => {
       if (!v('prName')) throw Error('Name is required');
+      const upc = Math.max(1, n_('prUpc') || 1);
       const row = { name:v('prName'), sku:v('prSku')||null, category_id:v('prCat')||null, unit:v('prUnit')||'pc',
-        cost_price:n_('prCost'), sale_price:n_('prSale'), min_stock:n_('prMin') };
+        cost_price:n_('prCost'), sale_price:n_('prSale'), min_stock:n_('prMin'), units_per_carton:upc };
       if (id) row.is_active = $('prAct').checked;
-      const r = id ? await sb.from('products').update(row).eq('id', id) : await sb.from('products').insert(row);
-      if (r.error) throw r.error;
+      if (id){
+        const r = await sb.from('products').update(row).eq('id', id);
+        if (r.error) throw r.error;
+      } else {
+        const { data, error } = await sb.from('products').insert(row).select().single();
+        if (error) throw error;
+        const openQty = r4((n_('prQc')||0) * upc + (n_('prQp')||0));
+        if (openQty > 0){
+          if (!v('prLoc')) throw Error('Choose a location for the opening stock');
+          const r2 = await sb.from('batches').insert({ product_id:data.id, location_id:v('prLoc'),
+            qty_received:openQty, qty_remaining:openQty, unit_cost:n_('prCost'), expiry_date:v('prExp')||null });
+          if (r2.error) throw r2.error;
+        }
+      }
       closeModal(); await refresh(); toast(id ? 'Product updated' : 'Product added', 'ok');
-    }});
-}
-
-/* ---------------- catalog: machines ---------------- */
-const MTYPE = { coffee:'Coffee', snacks:'Snacks', combo:'Combo' };
-function pgMachines(){
-  const mS = firstOfMonth();
-  const rows = S.c.machines.map(m => {
-    const coll = S.c.collections.filter(c => c.machine_id === m.id && c.date >= mS).reduce((s,c)=>s + +c.amount, 0);
-    return `<tr><td class="bold">${esc(m.code||'—')}</td><td>${esc(m.name||'—')}</td>
-      <td><span class="pill ${m.type==='coffee'?'p-teal':m.type==='combo'?'p-vio':'p-gray'}">${MTYPE[m.type]||'Snacks'}</span></td>
-      <td class="mut">${esc(m.site||'—')}</td><td class="mut">${esc(nameOf('locations', m.location_id))}</td>
-      <td class="r">${AED(coll)}</td>
-      <td>${m.status==='active'?'<span class="pill p-ok">Active</span>':m.status==='maintenance'?'<span class="pill p-low">Maintenance</span>':'<span class="pill p-gray">Inactive</span>'}</td>
-      ${rowBtns(editIB(`machineModal('${m.id}')`), delIB(`delRow('machines','${m.id}','machine')`))}</tr>`; });
-  page('Machines', addBtn('Add machine', 'machineModal()'),
-    tbl(['Code','Name','Type','Site / client','Served from',['Collections MTD','r'],'Status',''], rows,
-      { empty:'No machines yet — add your coffee and snack machines with their site.', emptyBtn: addBtn('Add machine','machineModal()') }));
-}
-function machineModal(id){
-  const m = id ? rec('machines', id) : {};
-  openModal(id ? 'Edit machine' : 'Add machine', `
-    <div class="frow">${F.inp('mCode','Code',{val:m.code||'',ph:'e.g. DXB-01'})}${F.inp('mName','Name',{val:m.name||'',req:true})}</div>
-    <div class="frow">${F.sel('mType','Type', Object.entries(MTYPE), m.type||'snacks', {noEmpty:true})}${F.inp('mSite','Site / client',{val:m.site||'',ph:'Mall, office, hospital…'})}</div>
-    <div class="frow">
-      ${F.sel('mLoc','Served from location', LISTS.locs(), m.location_id)}
-      ${F.sel('mStatus','Status', [['active','Active'],['maintenance','Maintenance'],['inactive','Inactive']], m.status||'active', {noEmpty:true})}
-    </div>`, { onSave: async () => {
-      if (!v('mName')) throw Error('Name is required');
-      const row = { code:v('mCode')||null, name:v('mName'), type:v('mType'), site:v('mSite')||null,
-        location_id:v('mLoc')||null, status:v('mStatus') };
-      const r = id ? await sb.from('machines').update(row).eq('id', id) : await sb.from('machines').insert(row);
-      if (r.error) throw r.error;
-      closeModal(); await refresh(); toast(id ? 'Machine updated' : 'Machine added', 'ok');
     }});
 }
 
@@ -1188,8 +1217,8 @@ function pgEmployees(){
       <td>${e.is_active===false?'<span class="pill p-gray">Inactive</span>':'<span class="pill p-ok">Active</span>'}</td>
       ${rowBtns(editIB(`employeeModal('${e.id}')`), delIB(`delRow('employees','${e.id}','employee')`))}</tr>`; });
   page('Employees', addBtn('Add employee', 'employeeModal()'),
-    tbl(['Name','Phone','Role',['Refills MTD','r'],['Refill value MTD','r'],'Status',''], rows,
-      { empty:'No employees yet — add the team who refill and collect from machines.', emptyBtn: addBtn('Add employee','employeeModal()') }));
+    tbl(['Name','Phone','Role',['Stock outs MTD','r'],['Value MTD','r'],'Status',''], rows,
+      { empty:'No employees yet — add the team who take stock and hand in cash.', emptyBtn: addBtn('Add employee','employeeModal()') }));
 }
 function employeeModal(id){
   const e = id ? rec('employees', id) : {};
@@ -1215,25 +1244,37 @@ function delRow(table, id, label){
 </script>
 <script>
 /* ---------------- reports ---------------- */
-const TPILL = { Purchase:'p-teal', Refill:'p-ok', Transfer:'p-vio', Waste:'p-out' };
+const TPILL = { 'Stock In':'p-teal', 'Stock Out':'p-ok', Transfer:'p-vio', Waste:'p-out' };
 function movementRows(){
   const out = [];
+  const expOf = bid => { const b = rec('batches', bid); return b ? b.expiry_date : null; };
   for (const b of S.c.batches){ if (!b.purchase_id) continue;
     const p = rec('purchases', b.purchase_id); if (!p) continue;
-    out.push({ date:p.date, t:'Purchase', product_id:b.product_id, qty:+b.qty_received, loc:p.location_id,
-      detail:'from ' + nameOf('suppliers', p.supplier_id), emp:null, mach:null, sup:p.supplier_id,
+    out.push({ date:p.date, t:'Stock In', product_id:b.product_id, qty:+b.qty_received, exp:b.expiry_date,
+      loc:p.location_id, party:nameOf('suppliers', p.supplier_id), emp:null, sup:p.supplier_id,
       value:b.qty_received*(+b.unit_cost||0) }); }
   for (const it of S.c.issue_items){ const i = S.maps.issues.get(it.issue_id); if (!i) continue;
-    out.push({ date:i.date, t:'Refill', product_id:it.product_id, qty:+it.qty, loc:i.location_id,
-      detail:'→ ' + (rec('machines', i.machine_id) ? [rec('machines',i.machine_id).code, rec('machines',i.machine_id).name].filter(Boolean).join(' · ') : '—'),
-      emp:i.employee_id, mach:i.machine_id, sup:null, value:it.qty*(+it.unit_price||0) }); }
+    const emp = i.employee_id, party = nameOf('employees', emp);
+    if (it.alloc && it.alloc.length)
+      for (const a of it.alloc)
+        out.push({ date:i.date, t:'Stock Out', product_id:it.product_id, qty:+a.q, exp:expOf(a.b),
+          loc:i.location_id, party, emp, sup:null, value:+a.q*(+it.unit_price||0) });
+    else
+      out.push({ date:i.date, t:'Stock Out', product_id:it.product_id, qty:+it.qty, exp:null,
+        loc:i.location_id, party, emp, sup:null, value:it.qty*(+it.unit_price||0) }); }
   for (const x of S.c.transfer_items){ const t = S.maps.transfers.get(x.transfer_id); if (!t) continue;
-    out.push({ date:t.date, t:'Transfer', product_id:x.product_id, qty:+x.qty, loc:t.from_location_id, loc2:t.to_location_id,
-      detail:'→ ' + nameOf('locations', t.to_location_id), emp:t.employee_id, mach:null, sup:null,
-      value:x.qty*(+x.unit_cost||0) }); }
+    if (x.alloc && x.alloc.length)
+      for (const a of x.alloc)
+        out.push({ date:t.date, t:'Transfer', product_id:x.product_id, qty:+a.q, exp:expOf(a.b),
+          loc:t.from_location_id, loc2:t.to_location_id, party:'→ ' + nameOf('locations', t.to_location_id),
+          emp:t.employee_id, sup:null, value:+a.q*(+x.unit_cost||0) });
+    else
+      out.push({ date:t.date, t:'Transfer', product_id:x.product_id, qty:+x.qty, exp:null,
+        loc:t.from_location_id, loc2:t.to_location_id, party:'→ ' + nameOf('locations', t.to_location_id),
+        emp:t.employee_id, sup:null, value:x.qty*(+x.unit_cost||0) }); }
   for (const a of S.c.adjustments){ const b = rec('batches', a.batch_id);
-    out.push({ date:a.date, t:'Waste', product_id:a.product_id, qty:+a.qty, loc:a.location_id,
-      detail:a.reason||'other', emp:null, mach:null, sup:null, value:a.qty*((b ? +b.unit_cost : 0)||0) }); }
+    out.push({ date:a.date, t:'Waste', product_id:a.product_id, qty:+a.qty, exp:b?b.expiry_date:null,
+      loc:a.location_id, party:a.reason||'other', emp:null, sup:null, value:a.qty*((b ? +b.unit_cost : 0)||0) }); }
   return out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 }
 function repFiltered(){
@@ -1244,13 +1285,12 @@ function repFiltered(){
     (!f.loc || r.loc === f.loc || r.loc2 === f.loc) &&
     (!f.prod || r.product_id === f.prod) &&
     (!f.cat || rec('products', r.product_id)?.category_id === f.cat) &&
-    (!f.mach || r.mach === f.mach) &&
     (!f.emp || r.emp === f.emp) &&
     (!f.sup || r.sup === f.sup));
 }
 function repSet(k, val){ S.f.rep[k] = val; pgReports(); }
 function pgReports(){
-  const f = S.f.rep ||= { from:firstOfMonth(), to:todayStr(), type:'', loc:'', cat:'', prod:'', mach:'', emp:'', sup:'' };
+  const f = S.f.rep ||= { from:firstOfMonth(), to:todayStr(), type:'', loc:'', cat:'', prod:'', emp:'', sup:'' };
   const rows = repFiltered();
   const sum = t => rows.filter(r=>r.t===t).reduce((s,r)=>s+r.value, 0);
   const selHTML = (k, label, list, emptyLabel) => `<div><label>${label}</label>
@@ -1260,38 +1300,60 @@ function pgReports(){
     <td class="mut">${fmtD(r.date)}</td>
     <td><span class="pill ${TPILL[r.t]}">${r.t}</span></td>
     <td>${esc(nameOf('products', r.product_id))}</td>
-    <td class="r ${r.t==='Purchase'?'pos':r.t==='Transfer'?'':'neg'}">${r.t==='Purchase'?'+':r.t==='Transfer'?'':'−'}${NUM(r.qty)}</td>
+    <td class="r ${r.t==='Stock In'?'pos':r.t==='Transfer'?'':'neg'}">${r.t==='Stock In'?'+':r.t==='Transfer'?'':'−'}${NUM(r.qty)}</td>
+    <td class="mut">${r.exp ? fmtD(r.exp) : '—'}</td>
     <td class="mut">${esc(nameOf('locations', r.loc))}</td>
-    <td class="mut">${esc(r.detail)}</td>
-    <td class="mut">${esc(r.emp ? nameOf('employees', r.emp) : '—')}</td>
+    <td>${esc(r.party)}</td>
     <td class="r">${AED(r.value)}</td></tr>`);
-  page('Reports', ghostBtn('Export CSV', 'repCSV()'), `
+  page('Reports', ghostBtn('Export PDF', 'repPDF()', 'doc') + ' ' + ghostBtn('Export CSV', 'repCSV()'), `
     <div class="fbar">
       <div><label>From</label><input type="date" value="${f.from}" onchange="repSet('from', this.value)"></div>
       <div><label>To</label><input type="date" value="${f.to}" onchange="repSet('to', this.value)"></div>
-      ${selHTML('type','Type', [['Purchase','Purchase'],['Refill','Refill'],['Transfer','Transfer'],['Waste','Waste']], 'All types')}
+      ${selHTML('type','Type', [['Stock In','Stock In (suppliers)'],['Stock Out','Stock Out (employees)'],['Transfer','Transfer'],['Waste','Waste']], 'All types')}
       ${selHTML('loc','Location', LISTS.locs(), 'All locations')}
       ${selHTML('prod','Product', LISTS.prods(), 'All products')}
       ${selHTML('cat','Category', LISTS.cats(), 'All categories')}
-      ${selHTML('mach','Machine', LISTS.machs(), 'All machines')}
       ${selHTML('emp','Employee', LISTS.emps(), 'All employees')}
       ${selHTML('sup','Supplier', LISTS.sups(), 'All suppliers')}
     </div>
     <div class="grid g4 mb">
-      ${kpi('Purchased', 'var(--teal)', AED(sum('Purchase')), 'stock received in range')}
-      ${kpi('Refilled to machines', 'var(--green)', AED(sum('Refill')), 'value at sale price')}
+      ${kpi('Stock in', 'var(--teal)', AED(sum('Stock In')), 'received from suppliers')}
+      ${kpi('Stock out', 'var(--green)', AED(sum('Stock Out')), 'taken by employees, at sale price')}
       ${kpi('Waste', 'var(--red)', AED(sum('Waste')), 'written-off cost')}
       ${kpi('Movements', 'var(--violet)', NUM(rows.length), rows.length > 400 ? 'showing latest 400' : 'all shown')}
     </div>
-    ${tbl(['Date','Type','Product',['Qty','r'],'Location','Detail','Employee',['Value','r']], body,
+    ${tbl(['Date','Type','Product',['Qty','r'],'Expiry','Location','Supplier / Employee',['Value','r']], body,
       { empty:'No movements match these filters.' })}`);
 }
 function repCSV(){
-  const rows = [['Date','Type','Product','Category','Qty','Location','Detail','Employee','Value AED']];
+  const rows = [['Date','Type','Product','Category','Qty','Expiry','Location','Supplier/Employee','Value AED']];
   for (const r of repFiltered()) rows.push([r.date, r.t, nameOf('products', r.product_id),
-    nameOf('categories', rec('products', r.product_id)?.category_id), r.qty,
-    nameOf('locations', r.loc), r.detail, r.emp ? nameOf('employees', r.emp) : '', r.value.toFixed(2)]);
+    nameOf('categories', rec('products', r.product_id)?.category_id), r.qty, r.exp||'',
+    nameOf('locations', r.loc), r.party, r.value.toFixed(2)]);
   dlCSV(rows, 'movements-' + todayStr() + '.csv');
+}
+function repPDF(){
+  const f = S.f.rep, rows = repFiltered();
+  const body = rows.map(r => `<tr><td>${fmtD(r.date)}</td><td>${r.t}</td>
+    <td>${esc(nameOf('products', r.product_id))}</td>
+    <td style="text-align:right">${r.t==='Stock In'?'+':r.t==='Transfer'?'':'−'}${NUM(r.qty)}</td>
+    <td>${r.exp ? fmtD(r.exp) : '—'}</td>
+    <td>${esc(nameOf('locations', r.loc))}</td><td>${esc(r.party)}</td>
+    <td style="text-align:right">${AED(r.value)}</td></tr>`).join('');
+  const totIn = rows.filter(r=>r.t==='Stock In').reduce((s,r)=>s+r.value,0);
+  const totOut = rows.filter(r=>r.t==='Stock Out').reduce((s,r)=>s+r.value,0);
+  printReport('Stock Movement Report',
+    fmtD(f.from) + ' → ' + fmtD(f.to) + ' · ' + NUM(rows.length) + ' movements · Stock in ' + AED(totIn) + ' · Stock out ' + AED(totOut),
+    `<table class="ptbl"><thead><tr><th>Date</th><th>Type</th><th>Product</th><th style="text-align:right">Qty</th><th>Expiry</th><th>Location</th><th>Supplier / Employee</th><th style="text-align:right">Value</th></tr></thead><tbody>${body}</tbody></table>`);
+}
+function printReport(title, sub, html){
+  $('printArea').innerHTML = `
+    <div class="phead">
+      <div><div class="pb1">Doctor</div><div class="pb2">VENDING<span class="pcoin"></span></div></div>
+      <div style="text-align:right"><h1>${esc(title)}</h1><div class="psub">${esc(sub)}</div>
+      <div class="psub">Printed ${fmtD(todayStr())}</div></div>
+    </div>` + html;
+  window.print();
 }
 
 /* ---------------- profit ---------------- */
@@ -1308,61 +1370,72 @@ function pgProfit(){
   const f = S.f.pf ||= pfRange('m');
   const inR = d => d >= f.from && d <= f.to;
   let refRev = 0, refCogs = 0;
-  const byMach = new Map(), byProd = new Map(), byEmp = new Map();
+  const byEmp = new Map(), byProd = new Map(), byLoc = new Map();
   for (const it of S.c.issue_items){
     const i = S.maps.issues.get(it.issue_id); if (!i || !inR(i.date||'')) continue;
     const rev = it.qty*(+it.unit_price||0), cogs = it.qty*(+it.unit_cost||0);
     refRev += rev; refCogs += cogs;
-    const m = byMach.get(i.machine_id) || { rev:0, cogs:0, coll:0 }; m.rev += rev; m.cogs += cogs; byMach.set(i.machine_id, m);
+    const m = byEmp.get(i.employee_id) || { rev:0, cogs:0, coll:0 }; m.rev += rev; m.cogs += cogs; byEmp.set(i.employee_id, m);
     const p = byProd.get(it.product_id) || { qty:0, rev:0, cogs:0 }; p.qty += +it.qty; p.rev += rev; p.cogs += cogs; byProd.set(it.product_id, p);
-    if (i.employee_id) byEmp.set(i.employee_id, (byEmp.get(i.employee_id)||0) + rev);
+    const L = byLoc.get(i.location_id) || { rev:0, cogs:0, coll:0 }; L.rev += rev; L.cogs += cogs; byLoc.set(i.location_id, L);
   }
   let coll = 0;
   for (const c of S.c.collections){ if (!inR(c.date||'')) continue; coll += +c.amount;
-    const m = byMach.get(c.machine_id) || { rev:0, cogs:0, coll:0 }; m.coll += +c.amount; byMach.set(c.machine_id, m); }
+    const m = byEmp.get(c.employee_id) || { rev:0, cogs:0, coll:0 }; m.coll += +c.amount; byEmp.set(c.employee_id, m);
+    if (c.location_id){ const L = byLoc.get(c.location_id) || { rev:0, cogs:0, coll:0 }; L.coll += +c.amount; byLoc.set(c.location_id, L); } }
   const refProfit = refRev - refCogs, collProfit = coll - refCogs;
   const margin = refRev > 0 ? refProfit/refRev : 0;
 
-  const machRows = [...byMach.entries()].sort((a,b)=>(b[1].coll+b[1].rev)-(a[1].coll+a[1].rev)).map(([id,m])=>{
+  const empRows = [...byEmp.entries()].sort((a,b)=>(b[1].coll+b[1].rev)-(a[1].coll+a[1].rev)).map(([id,m])=>{
     const cp = m.coll - m.cogs;
-    return `<tr><td>${machLabel(id)}</td>
+    return `<tr><td class="bold">${esc(nameOf('employees', id))}</td>
       <td class="r">${AED(m.rev)}</td><td class="r mut">${AED(m.cogs)}</td>
       <td class="r ${m.rev-m.cogs>=0?'pos':'neg'}">${AED(m.rev-m.cogs)}</td>
       <td class="r">${AED(m.coll)}</td>
       <td class="r bold ${cp>=0?'pos':'neg'}">${AED(cp)}</td></tr>`; });
+  const locRows2 = [...byLoc.entries()].sort((a,b)=>(b[1].rev)-(a[1].rev)).map(([id,L])=>{
+    return `<tr><td>${esc(nameOf('locations', id))}</td>
+      <td class="r">${AED(L.rev)}</td><td class="r mut">${AED(L.cogs)}</td>
+      <td class="r ${L.rev-L.cogs>=0?'pos':'neg'}">${AED(L.rev-L.cogs)}</td>
+      <td class="r">${AED(L.coll)}</td></tr>`; });
   const prodRows = [...byProd.entries()].sort((a,b)=>(b[1].rev-b[1].cogs)-(a[1].rev-a[1].cogs)).map(([id,p])=>{
     const pr = p.rev - p.cogs, mg = p.rev > 0 ? pr/p.rev : 0;
-    return `<tr><td>${esc(nameOf('products', id))}</td><td class="r">${NUM(p.qty)}</td>
+    return `<tr><td>${esc(nameOf('products', id))}</td><td class="r">${fmtQty(id, p.qty)}</td>
       <td class="r">${AED(p.rev)}</td><td class="r mut">${AED(p.cogs)}</td>
       <td class="r bold ${pr>=0?'pos':'neg'}">${AED(pr)}</td><td class="r">${PCT(mg)}</td></tr>`; });
-  const empBars = [...byEmp.entries()].map(([id,v2])=>({l:nameOf('employees', id), v:v2})).sort((a,b)=>b.v-a.v).slice(0,8);
   const preset = (k, label) => `<button class="btn ghost sm" onclick="setPf('${k}')">${label}</button>`;
 
-  page('Profit', '', `
+  page('Profit', ghostBtn('Export PDF', 'profitPDF()'), `
     <div class="fbar">
       ${preset('m','This month')}${preset('lm','Last month')}${preset('30','Last 30 days')}${preset('y','This year')}
       <div><label>From</label><input type="date" value="${f.from}" onchange="S.f.pf.from=this.value;pgProfit()"></div>
       <div><label>To</label><input type="date" value="${f.to}" onchange="S.f.pf.to=this.value;pgProfit()"></div>
     </div>
     <div class="grid g3 mb">
-      ${kpi('Refill revenue', 'var(--teal)', AED(refRev), 'stock issued to machines, at sale price')}
-      ${kpi('COGS', 'var(--amber)', AED(refCogs), 'FEFO batch cost of issued stock')}
-      ${kpi('Refill profit', refProfit>=0?'var(--green)':'var(--red)', `<span class="${refProfit>=0?'':'neg'}">${AED(refProfit)}</span>`, 'margin ' + PCT(margin))}
-      ${kpi('Collections', 'var(--violet)', AED(coll), 'cash pulled from machines')}
+      ${kpi('Stock-out revenue', 'var(--teal)', AED(refRev), 'taken by employees, at sale price')}
+      ${kpi('COGS', 'var(--amber)', AED(refCogs), 'FEFO batch cost of that stock')}
+      ${kpi('Stock-out profit', refProfit>=0?'var(--green)':'var(--red)', `<span class="${refProfit>=0?'':'neg'}">${AED(refProfit)}</span>`, 'margin ' + PCT(margin))}
+      ${kpi('Collections', 'var(--violet)', AED(coll), 'cash handed in by employees')}
       ${kpi('Collections profit', collProfit>=0?'var(--green)':'var(--red)', `<span class="${collProfit>=0?'':'neg'}">${AED(collProfit)}</span>`, 'collections − COGS')}
-      ${kpi('Gap', 'var(--teal)', AED(coll - refRev), 'collections vs issued value — shrinkage check')}
+      ${kpi('Gap', 'var(--teal)', AED(coll - refRev), 'collections vs stock-out value — shrinkage check')}
     </div>
-    <div class="mnote mb"><b>Two ways to read profit:</b> “Refill profit” treats stock loaded into a machine as sold. “Collections profit” uses the real cash you collected minus the same COGS. Over time the two should converge — a growing gap means unsold stock sitting in machines, or losses.</div>
-    <div class="sec-title">By machine <span class="coin"></span></div>
-    ${tbl(['Machine',['Refill value','r'],['COGS','r'],['Refill profit','r'],['Collections','r'],['Collections profit','r']], machRows,
-      { empty:'No machine activity in this period.' })}
+    <div class="mnote mb"><b>Two ways to read profit:</b> “Stock-out profit” treats what employees took as sold at sale price. “Collections profit” uses the real cash they handed in minus the same COGS. Over time the two should converge — a growing gap means unsold stock with employees, or losses.</div>
+    <div class="sec-title">By employee <span class="coin"></span></div>
+    ${tbl(['Employee',['Stock-out value','r'],['COGS','r'],['Stock-out profit','r'],['Collections','r'],['Collections profit','r']], empRows,
+      { empty:'No employee activity in this period.' })}
     <div class="sec-title">By product <span class="coin"></span></div>
     ${tbl(['Product',['Qty out','r'],['Revenue','r'],['COGS','r'],['Profit','r'],['Margin','r']], prodRows,
-      { empty:'No products issued in this period.' })}
-    <div class="grid g2" style="margin-top:22px">
-      <div class="card"><h3>By employee <span class="sp">refill value</span></h3>${hbars(empBars)}</div>
-      <div class="card"><h3>Period</h3><div class="mut" style="font-size:13.5px;line-height:1.7">${fmtD(f.from)} → ${fmtD(f.to)}<br>${NUM(machRows.length)} machines · ${NUM(prodRows.length)} products with activity</div></div>
-    </div>`);
+      { empty:'No products taken in this period.' })}
+    <div class="sec-title">By location <span class="coin"></span></div>
+    ${tbl(['Location',['Stock-out value','r'],['COGS','r'],['Stock-out profit','r'],['Collections','r']], locRows2,
+      { empty:'No location activity in this period.' })}`);
+}
+function profitPDF(){
+  const f = S.f.pf, tables = [...document.querySelectorAll('#page .twrap')].map(t=>t.outerHTML).join('<br>');
+  const kpis = [...document.querySelectorAll('#page .kpi')].map(k =>
+    `<tr><td>${k.querySelector('.kl').textContent}</td><td style="text-align:right"><b>${k.querySelector('.kv').textContent}</b></td></tr>`).join('');
+  printReport('Profit Report', fmtD(f.from) + ' → ' + fmtD(f.to),
+    `<table class="ptbl"><tbody>${kpis}</tbody></table><br>` + tables);
 }
 
 /* ---------------- settings ---------------- */
@@ -1399,7 +1472,7 @@ function pgSettings(){
     <div class="card" style="margin-top:16px;border-color:rgba(240,113,107,.35)">
       <h3 style="color:var(--red)">${ic('alert',15)} Danger zone</h3>
       <div class="mut" style="font-size:13.5px;line-height:1.7;margin-bottom:14px">
-        Clears all suppliers, products, machines, employees, purchases, refills, transfers,
+        Clears all suppliers, products, employees, stock in/out, transfers,
         collections and waste — useful for wiping the demo data before going live.
         Your locations and categories stay. This can’t be undone.
       </div>
@@ -1407,11 +1480,11 @@ function pgSettings(){
     </div>`);
 }
 function confirmWipe(){
-  askConfirm('Permanently delete ALL suppliers, products, machines, employees, and every transaction (purchases, refills, transfers, collections, waste)? Locations and categories stay. This cannot be undone.',
+  askConfirm('Permanently delete ALL suppliers, products, employees, and every transaction (stock in/out, transfers, collections, waste)? Locations and categories stay. This cannot be undone.',
     wipeData, 'Delete everything');
 }
 async function wipeData(){
-  const order = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machines','products','employees','suppliers'];
+  const order = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','products','employees','suppliers'];
   for (const t of order){
     const r = await sb.from(t).delete().not('id','is',null);
     if (r.error) throw r.error;
@@ -1456,8 +1529,8 @@ async function insertAll(table, rows){
   }
 }
 async function doRestore(payload){
-  const clearOrder  = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machines','products','employees','suppliers','categories','locations'];
-  const insertOrder = ['locations','categories','suppliers','employees','products','machines','purchases','transfers','batches','issues','issue_items','transfer_items','collections','adjustments'];
+  const clearOrder  = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','products','employees','suppliers','categories','locations'];
+  const insertOrder = ['locations','categories','suppliers','employees','products','purchases','transfers','batches','issues','issue_items','transfer_items','collections','adjustments'];
   for (const t of clearOrder){ const r = await sb.from(t).delete().not('id','is',null); if (r.error) throw r.error; }
   for (const t of insertOrder) await insertAll(t, payload.data[t]);
   closeModal(); await refresh(); toast('Backup restored', 'ok');
@@ -1493,7 +1566,7 @@ function catModal(id){
 const PAGES = {
   dashboard:pgDashboard, inventory:pgInventory, profit:pgProfit, reports:pgReports,
   purchases:pgPurchases, refills:pgRefills, collections:pgCollections, transfers:pgTransfers,
-  products:pgProducts, machines:pgMachines, suppliers:pgSuppliers, employees:pgEmployees, settings:pgSettings
+  products:pgProducts, suppliers:pgSuppliers, employees:pgEmployees, settings:pgSettings
 };
 boot();
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
