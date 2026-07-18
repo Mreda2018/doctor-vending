@@ -191,7 +191,7 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
 /* auth */
 #auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .auth-card{background:#fff;color:#101418;border-radius:20px;padding:36px 34px 30px;width:min(410px,94vw);box-shadow:0 30px 90px rgba(0,0,0,.6)}
-.auth-card img{width:210px;margin:0 auto 6px;display:block}
+.auth-card img{width:140px;max-width:55%;margin:0 auto 8px;display:block}
 .auth-card .coin-drop{margin-bottom:14px}
 .auth-card .coin-drop::after{background:#d8e6ea}
 .auth-card label{color:#5b6b73}
@@ -258,7 +258,7 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
 <body>
 <style>
 .pl-line{grid-template-columns:2fr .6fr .6fr .8fr 1fr auto}
-.rf-line{grid-template-columns:2.2fr .6fr .6fr .8fr auto}
+.rf-line{grid-template-columns:1.9fr .95fr .55fr .55fr .75fr auto}
 .tr-line{grid-template-columns:2.6fr .8fr auto}
 @media(max-width:640px){.pl-line,.rf-line,.tr-line{grid-template-columns:1fr 1fr}.line .full{grid-column:1/-1}}
 </style>
@@ -343,7 +343,7 @@ const CONFIG = {
 
 /* ---------------- state & helpers ---------------- */
 let sb = null;
-const TABLES = ['locations','categories','suppliers','products','employees',
+const TABLES = ['locations','categories','suppliers','products','employees','machines','machine_transfers',
   'purchases','batches','issues','issue_items','transfers','transfer_items','collections','adjustments'];
 const S = { page:'dashboard', c:{}, maps:{}, f:{} };
 
@@ -408,10 +408,11 @@ async function loadAll(){
   const bad = res.find(r => r.error); if (bad) throw bad.error;
   TABLES.forEach((t,i) => S.c[t] = res[i].data || []);
   const byDate = (a,b) => (b.date||'').localeCompare(a.date||'') || (b.created_at||'').localeCompare(a.created_at||'');
-  for (const t of ['purchases','issues','transfers','collections','adjustments']) S.c[t].sort(byDate);
+  for (const t of ['purchases','issues','transfers','collections','adjustments','machine_transfers']) S.c[t].sort(byDate);
   S.c.batches.sort((a,b) => ((a.expiry_date||'9999')+'').localeCompare((b.expiry_date||'9999')+''));
   S.c.products.sort((a,b) => a.name.localeCompare(b.name));
   for (const t of ['suppliers','employees','locations','categories']) S.c[t].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  S.c.machines.sort((a,b)=>(a.model||'').localeCompare(b.model||'') || (a.code||'').localeCompare(b.code||''));
   rebuildMaps();
 }
 async function refresh(){ await loadAll(); PAGES[S.page](); }
@@ -419,11 +420,15 @@ async function refresh(){ await loadAll(); PAGES[S.page](); }
 /* ---------------- stock math ---------------- */
 const availAt = (pid, loc) => S.c.batches.reduce((s,b) =>
   s + (b.product_id===pid && b.location_id===loc && +b.qty_remaining>0 ? +b.qty_remaining : 0), 0);
+const availAtExp = (pid, loc, exp) => S.c.batches.reduce((s,b) =>
+  s + (b.product_id===pid && b.location_id===loc && +b.qty_remaining>0 &&
+    (!exp ? true : exp==='__none' ? !b.expiry_date : b.expiry_date===exp) ? +b.qty_remaining : 0), 0);
 
-function fefoPick(pid, loc, qty, work){
+function fefoPick(pid, loc, qty, work, exp){
   const rem = b => work && work.has(b.id) ? work.get(b.id) : +b.qty_remaining;
+  const matchExp = b => !exp ? true : (exp === '__none' ? !b.expiry_date : b.expiry_date === exp);
   const bs = S.c.batches
-    .filter(b => b.product_id===pid && b.location_id===loc && rem(b) > 1e-9)
+    .filter(b => b.product_id===pid && b.location_id===loc && rem(b) > 1e-9 && matchExp(b))
     .sort((a,b) => ((a.expiry_date||'9999-12-31')+(a.created_at||'')).localeCompare((b.expiry_date||'9999-12-31')+(b.created_at||'')));
   let need = qty; const picks = [];
   for (const b of bs){ if (need <= 1e-9) break;
@@ -582,7 +587,7 @@ async function signOut(){ if (sb) await sb.auth.signOut(); location.reload(); }
 const NAV = [
   ['Overview',   [['dashboard','Dashboard','grid'], ['inventory','Inventory','box'], ['profit','Profit','coins'], ['reports','Reports','doc']]],
   ['Operations', [['purchases','Stock In','inbox'], ['refills','Stock Out','truck'], ['collections','Collections','cash'], ['transfers','Transfers','swap']]],
-  ['Catalog',    [['products','Products','tag'], ['suppliers','Suppliers','factory'], ['employees','Employees','user']]],
+  ['Catalog',    [['products','Products','tag'], ['machines','Machines','machine'], ['suppliers','Suppliers','factory'], ['employees','Employees','user']]],
   ['System',     [['settings','Settings','cog']]]
 ];
 function buildNav(){
@@ -883,24 +888,41 @@ function pgRefills(){
 function refLineHTML(){
   return `<div class="line rf-line">
     <div class="full"><label>Product</label><select class="lp" required onchange="refProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
+    <div><label>Expiry</label><select class="lexp" onchange="refHint(this.closest('.line'))"><option value="">Auto (FEFO)</option></select></div>
     <div><label>Cartons</label><input class="lqc" type="number" min="0" step="any" inputmode="decimal" placeholder="0" oninput="refHint(this.closest('.line'))"></div>
     <div><label>Pieces</label><input class="lq" type="number" min="0" step="any" inputmode="decimal" placeholder="0" oninput="refHint(this.closest('.line'))"></div>
     <div><label>Price / pc</label><input class="ls" type="number" min="0" step="any" inputmode="decimal"></div>
     <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
   </div>`;
 }
+function refExpOpts(line){
+  const pid = line.querySelector('.lp').value, loc = v('rLoc'), sel = line.querySelector('.lexp');
+  const cur = sel.value;
+  let opts = '<option value="">Auto (FEFO)</option>';
+  if (pid && loc){
+    const m = new Map();
+    for (const b of S.c.batches){
+      if (b.product_id !== pid || b.location_id !== loc || +b.qty_remaining <= 0) continue;
+      const k = b.expiry_date || '__none'; m.set(k, (m.get(k)||0) + +b.qty_remaining); }
+    const keys = [...m.keys()].sort((a,b) => (a==='__none'?'9999':a).localeCompare(b==='__none'?'9999':b));
+    for (const k of keys) opts += `<option value="${k}">${k==='__none'?'No expiry':fmtD(k)} · ${NUM(m.get(k))} pc</option>`;
+  }
+  sel.innerHTML = opts;
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
 function refProd(sel){
   const p = rec('products', sel.value), line = sel.closest('.line');
   if (p) line.querySelector('.ls').value = +p.sale_price || '';
-  refHint(line);
+  refExpOpts(line); refHint(line);
 }
 function refHint(line){
   const pid = line.querySelector('.lp').value, loc = v('rLoc'), h = line.querySelector('.hint');
   if (!pid || !loc){ h.innerHTML = ''; return; }
-  const av = availAt(pid, loc), q = lineQty(line);
-  h.innerHTML = `Available: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+  const exp = line.querySelector('.lexp').value;
+  const av = availAtExp(pid, loc, exp), q = lineQty(line);
+  h.innerHTML = `Available${exp?' at this expiry':''}: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
 }
-function refLocChange(){ document.querySelectorAll('#rlines .line').forEach(refHint); }
+function refLocChange(){ document.querySelectorAll('#rlines .line').forEach(l => { refExpOpts(l); refHint(l); }); }
 function addRefLine(){ $('rlines').insertAdjacentHTML('beforeend', refLineHTML()); }
 function newRefill(){
   openModal('New stock out', `
@@ -915,13 +937,16 @@ function newRefill(){
       const loc = v('rLoc');
       if (!loc || !v('rEmp')) throw Error('Employee and location are required');
       const lines = [...document.querySelectorAll('#rlines .line')].map(r => ({
-        product_id: r.querySelector('.lp').value, qty: lineQty(r), price: +r.querySelector('.ls').value || 0 }));
+        product_id: r.querySelector('.lp').value, qty: lineQty(r), price: +r.querySelector('.ls').value || 0,
+        exp: r.querySelector('.lexp').value }));
       if (!lines.length) throw Error('Add at least one line');
       const work = new Map(), allocs = [];
       for (const l of lines){
         if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
-        const picks = fefoPick(l.product_id, loc, l.qty, work);
-        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', loc)} (available ${NUM(availAt(l.product_id, loc))})`);
+        const picks = fefoPick(l.product_id, loc, l.qty, work, l.exp);
+        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', loc)}` +
+          (l.exp ? ` for expiry ${l.exp==='__none'?'(none)':fmtD(l.exp)} (available ${NUM(availAtExp(l.product_id, loc, l.exp))})`
+                 : ` (available ${NUM(availAt(l.product_id, loc))})`));
         const cost = picks.reduce((s,p)=>s + p.t*(+p.b.unit_cost||0), 0) / l.qty;
         allocs.push({ l, picks, cost });
       }
@@ -1234,6 +1259,102 @@ function employeeModal(id){
       closeModal(); await refresh(); toast(id ? 'Employee updated' : 'Employee added', 'ok');
     }});
 }
+
+/* ---------------- machines (assets) & machine transfers ---------------- */
+const MSTATUS = { in_stock:'In stock', sold:'Sold', maintenance:'Maintenance' };
+const mstPill = st => st==='sold' ? '<span class="pill p-vio">Sold</span>'
+  : st==='maintenance' ? '<span class="pill p-low">Maintenance</span>' : '<span class="pill p-ok">In stock</span>';
+function machineLabel(m){ return [m.model, m.code, m.serial_no].filter(Boolean).join(' · '); }
+function pgMachines(){
+  const rows = S.c.machines.map(m => `<tr>
+    <td class="bold">${esc(m.model||'—')}</td><td>${esc(m.code||'—')}</td>
+    <td class="mut">${esc(m.serial_no||'—')}</td>
+    <td>${esc(nameOf('locations', m.location_id))}</td>
+    <td>${mstPill(m.status)}</td><td class="mut">${esc(m.notes||'')}</td>
+    ${rowBtns(editIB(`machineModal('${m.id}')`), delIB(`delRow('machines','${m.id}','machine')`))}</tr>`);
+  const trows = S.c.machine_transfers.map(t => { const m = rec('machines', t.machine_id) || {};
+    return `<tr><td class="mut">${fmtD(t.date)}</td>
+      <td class="bold">${esc(m.model||'—')}</td><td>${esc(m.code||'—')}</td>
+      <td class="mut">${esc(m.serial_no||'—')}</td>
+      <td>${esc(nameOf('locations', t.from_location_id))} <span class="mut">→</span> ${esc(nameOf('locations', t.to_location_id))}</td>
+      <td class="mut">${esc(nameOf('employees', t.employee_id))}</td>
+      ${rowBtns(delIB(`delMachineTransfer('${t.id}')`))}</tr>`; });
+  page('Machines',
+    addBtn('Add machine', 'machineModal()') + ' ' +
+    ghostBtn('Transfer machine', 'machineTransferModal()', 'swap') + ' ' +
+    ghostBtn('Transfer report PDF', 'machinesPDF()', 'doc'), `
+    <div class="mnote mb">The vending machines you own and sell — with model, machine ID and serial number. Transfers between locations are logged below and update the machine's current location.</div>
+    ${tbl(['Model','Machine ID','Serial no.','Current location','Status','Notes',''], rows,
+      { empty:'No machines yet — add your machines with model, ID and serial number.', emptyBtn: addBtn('Add machine','machineModal()') })}
+    <div class="sec-title">Machine transfer history <span class="coin"></span></div>
+    ${tbl(['Date','Model','Machine ID','Serial no.','From → To','By',''], trows,
+      { empty:'No machine transfers yet.' })}`);
+}
+function machineModal(id){
+  const m = id ? rec('machines', id) : {};
+  openModal(id ? 'Edit machine' : 'Add machine', `
+    <div class="frow">${F.inp('mModel','Model',{req:true,val:m.model||'',ph:'e.g. Necta Krea Touch'})}${F.inp('mCode','Machine ID',{val:m.code||'',ph:'e.g. DV-021'})}</div>
+    <div class="frow">${F.inp('mSerial','Serial number',{val:m.serial_no||''})}${F.sel('mLoc','Current location', LISTS.locs(), m.location_id, {req:true, emptyLabel:'Choose…'})}</div>
+    <div class="frow">${F.sel('mStatus','Status', Object.entries(MSTATUS), m.status||'in_stock', {noEmpty:true})}<div></div></div>
+    ${F.area('mNotes','Notes', m.notes||'')}`, { onSave: async () => {
+      if (!v('mModel')) throw Error('Model is required');
+      if (!v('mLoc')) throw Error('Choose the current location');
+      const row = { model:v('mModel'), code:v('mCode')||null, serial_no:v('mSerial')||null,
+        location_id:v('mLoc'), status:v('mStatus'), notes:v('mNotes')||null };
+      const r = id ? await sb.from('machines').update(row).eq('id', id) : await sb.from('machines').insert(row);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast(id ? 'Machine updated' : 'Machine added', 'ok');
+    }});
+}
+function mtMachChange(){
+  const m = rec('machines', v('mtMach'));
+  $('mtFromShow').value = m ? nameOf('locations', m.location_id) : '';
+}
+function machineTransferModal(){
+  const list = S.c.machines.map(m => [m.id, machineLabel(m) + ' — ' + nameOf('locations', m.location_id)]);
+  openModal('Transfer machine', `
+    <div class="frow">${F.inp('mtDate','Date',{type:'date',val:todayStr(),req:true})}
+      ${F.sel('mtMach','Machine', list, '', {req:true, emptyLabel:'Choose…', onch:'mtMachChange()'})}</div>
+    <div class="frow">
+      <div><label>From (current)</label><input id="mtFromShow" disabled></div>
+      ${F.sel('mtTo','To location', LISTS.locs(), '', {req:true, emptyLabel:'Choose…'})}
+    </div>
+    <div class="frow">${F.sel('mtEmp','Moved by', LISTS.emps())}<div></div></div>
+    ${F.area('mtNotes','Notes')}`, { saveLabel:'Transfer', onSave: async () => {
+      const m = rec('machines', v('mtMach'));
+      if (!m) throw Error('Choose a machine');
+      const to = v('mtTo');
+      if (!to) throw Error('Choose the destination');
+      if (to === m.location_id) throw Error('Machine is already at that location');
+      let r = await sb.from('machine_transfers').insert({ date:v('mtDate')||todayStr(), machine_id:m.id,
+        from_location_id:m.location_id||null, to_location_id:to, employee_id:v('mtEmp')||null, notes:v('mtNotes')||null });
+      if (r.error) throw r.error;
+      r = await sb.from('machines').update({ location_id:to }).eq('id', m.id);
+      if (r.error) throw r.error;
+      closeModal(); await refresh(); toast('Machine transferred', 'ok');
+    }});
+}
+function delMachineTransfer(id){
+  const t = rec('machine_transfers', id);
+  askConfirm('Delete this machine transfer record? If it is the latest move, the machine goes back to its previous location.', async () => {
+    const m = rec('machines', t.machine_id);
+    if (m && m.location_id === t.to_location_id && t.from_location_id){
+      const r = await sb.from('machines').update({ location_id:t.from_location_id }).eq('id', m.id);
+      if (r.error) throw r.error;
+    }
+    const r2 = await sb.from('machine_transfers').delete().eq('id', id); if (r2.error) throw r2.error;
+    closeModal(); await refresh(); toast('Machine transfer deleted', 'ok');
+  });
+}
+function machinesPDF(){
+  const body = S.c.machine_transfers.map(t => { const m = rec('machines', t.machine_id) || {};
+    return `<tr><td>${fmtD(t.date)}</td><td>${esc(m.model||'—')}</td><td>${esc(m.code||'—')}</td>
+      <td>${esc(m.serial_no||'—')}</td><td>${esc(nameOf('locations', t.from_location_id))}</td>
+      <td>${esc(nameOf('locations', t.to_location_id))}</td><td>${esc(nameOf('employees', t.employee_id))}</td></tr>`; }).join('');
+  printReport('Machine Transfer Report', NUM(S.c.machine_transfers.length) + ' transfers · ' + NUM(S.c.machines.length) + ' machines',
+    `<table class="ptbl"><thead><tr><th>Date</th><th>Machine model</th><th>Machine ID</th><th>Serial number</th><th>Location from</th><th>Location to</th><th>Moved by</th></tr></thead><tbody>${body}</tbody></table>`);
+}
+
 function delRow(table, id, label){
   askConfirm(`Delete this ${label}? If it has history, deletion is blocked — deactivate it instead.`, async () => {
     const r = await sb.from(table).delete().eq('id', id);
@@ -1484,7 +1605,7 @@ function confirmWipe(){
     wipeData, 'Delete everything');
 }
 async function wipeData(){
-  const order = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','products','employees','suppliers'];
+  const order = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machine_transfers','machines','products','employees','suppliers'];
   for (const t of order){
     const r = await sb.from(t).delete().not('id','is',null);
     if (r.error) throw r.error;
@@ -1529,8 +1650,8 @@ async function insertAll(table, rows){
   }
 }
 async function doRestore(payload){
-  const clearOrder  = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','products','employees','suppliers','categories','locations'];
-  const insertOrder = ['locations','categories','suppliers','employees','products','purchases','transfers','batches','issues','issue_items','transfer_items','collections','adjustments'];
+  const clearOrder  = ['adjustments','issue_items','issues','transfer_items','collections','batches','transfers','purchases','machine_transfers','machines','products','employees','suppliers','categories','locations'];
+  const insertOrder = ['locations','categories','suppliers','employees','products','machines','purchases','transfers','batches','issues','issue_items','transfer_items','collections','adjustments','machine_transfers'];
   for (const t of clearOrder){ const r = await sb.from(t).delete().not('id','is',null); if (r.error) throw r.error; }
   for (const t of insertOrder) await insertAll(t, payload.data[t]);
   closeModal(); await refresh(); toast('Backup restored', 'ok');
@@ -1566,7 +1687,7 @@ function catModal(id){
 const PAGES = {
   dashboard:pgDashboard, inventory:pgInventory, profit:pgProfit, reports:pgReports,
   purchases:pgPurchases, refills:pgRefills, collections:pgCollections, transfers:pgTransfers,
-  products:pgProducts, suppliers:pgSuppliers, employees:pgEmployees, settings:pgSettings
+  products:pgProducts, machines:pgMachines, suppliers:pgSuppliers, employees:pgEmployees, settings:pgSettings
 };
 boot();
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
