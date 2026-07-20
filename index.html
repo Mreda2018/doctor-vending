@@ -259,7 +259,7 @@ svg.chart text{font-family:var(--ui);fill:var(--muted)}
 <style>
 .pl-line{grid-template-columns:2fr .6fr .6fr .8fr 1fr auto}
 .rf-line{grid-template-columns:1.9fr .95fr .55fr .55fr .75fr auto}
-.tr-line{grid-template-columns:2.6fr .8fr auto}
+.tr-line{grid-template-columns:2fr 1fr .7fr auto}
 @media(max-width:640px){.pl-line,.rf-line,.tr-line{grid-template-columns:1fr 1fr}.line .full{grid-column:1/-1}}
 </style>
 
@@ -1053,18 +1053,36 @@ function pgTransfers(){
 }
 function trLineHTML(){
   return `<div class="line tr-line">
-    <div class="full"><label>Product</label><select class="lp" required onchange="trHint(this.closest('.line'))"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
-    <div><label>Qty</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal" oninput="trHint(this.closest('.line'))"></div>
+    <div class="full"><label>Product</label><select class="lp" required onchange="trProd(this)"><option value=""></option>${activeProds().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><div class="hint"></div></div>
+    <div><label>Expiry</label><select class="lexp" onchange="trHint(this.closest('.line'))"><option value="">Auto (FEFO)</option></select></div>
+    <div><label>Qty (pc)</label><input class="lq" type="number" min="0" step="any" required inputmode="decimal" oninput="trHint(this.closest('.line'))"></div>
     <button type="button" class="ibtn del rm" onclick="this.closest('.line').remove()" aria-label="Remove line">${ic('trash',17)}</button>
   </div>`;
 }
+function trExpOpts(line){
+  const pid = line.querySelector('.lp').value, loc = v('tFrom'), sel = line.querySelector('.lexp');
+  const cur = sel.value;
+  let opts = '<option value="">Auto (FEFO)</option>';
+  if (pid && loc){
+    const m = new Map();
+    for (const b of S.c.batches){
+      if (b.product_id !== pid || b.location_id !== loc || +b.qty_remaining <= 0) continue;
+      const k = b.expiry_date || '__none'; m.set(k, (m.get(k)||0) + +b.qty_remaining); }
+    const keys = [...m.keys()].sort((a,b) => (a==='__none'?'9999':a).localeCompare(b==='__none'?'9999':b));
+    for (const k of keys) opts += `<option value="${k}">${k==='__none'?'No expiry':fmtD(k)} · ${NUM(m.get(k))} pc</option>`;
+  }
+  sel.innerHTML = opts;
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+function trProd(sel){ const line = sel.closest('.line'); trExpOpts(line); trHint(line); }
 function trHint(line){
   const pid = line.querySelector('.lp').value, loc = v('tFrom'), h = line.querySelector('.hint');
   if (!pid || !loc){ h.innerHTML = ''; return; }
-  const av = availAt(pid, loc), q = +line.querySelector('.lq').value || 0;
-  h.innerHTML = `Available: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
+  const exp = line.querySelector('.lexp').value;
+  const av = availAtExp(pid, loc, exp), q = +line.querySelector('.lq').value || 0;
+  h.innerHTML = `Available${exp?' at this expiry':''}: <b>${fmtQty(pid, av)}</b>` + (q > av ? ' <span class="neg">— not enough stock</span>' : '');
 }
-function trFromChange(){ document.querySelectorAll('#tlines .line').forEach(trHint); }
+function trFromChange(){ document.querySelectorAll('#tlines .line').forEach(l => { trExpOpts(l); trHint(l); }); }
 function addTrLine(){ $('tlines').insertAdjacentHTML('beforeend', trLineHTML()); }
 function newTransfer(){
   openModal('Transfer stock', `
@@ -1081,13 +1099,15 @@ function newTransfer(){
       if (!from || !to) throw Error('Choose both locations');
       if (from === to) throw Error('Source and destination must differ');
       const lines = [...document.querySelectorAll('#tlines .line')].map(r => ({
-        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value }));
+        product_id: r.querySelector('.lp').value, qty: +r.querySelector('.lq').value,
+        exp: r.querySelector('.lexp').value }));
       if (!lines.length) throw Error('Add at least one line');
       const work = new Map(), allocs = [];
       for (const l of lines){
         if (!l.product_id || !(l.qty > 0)) throw Error('Every line needs a product and a quantity');
-        const picks = fefoPick(l.product_id, from, l.qty, work);
-        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', from)}`);
+        const picks = fefoPick(l.product_id, from, l.qty, work, l.exp);
+        if (!picks) throw Error(`Not enough ${nameOf('products', l.product_id)} at ${nameOf('locations', from)}` +
+          (l.exp ? ` for expiry ${l.exp==='__none'?'(none)':fmtD(l.exp)} (available ${NUM(availAtExp(l.product_id, from, l.exp))})` : ''));
         const cost = picks.reduce((s,p)=>s + p.t*(+p.b.unit_cost||0), 0) / l.qty;
         allocs.push({ l, picks, cost });
       }
@@ -1110,12 +1130,16 @@ function newTransfer(){
 }
 function viewTransfer(id){
   const t = rec('transfers', id);
-  const rows = S.c.transfer_items.filter(x => x.transfer_id === id).map(x => `<tr>
-    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${NUM(x.qty)}</td>
-    <td class="r mut">${AED(x.unit_cost)}</td><td class="r">${AED(x.qty*(+x.unit_cost||0))}</td></tr>`).join('');
+  const rows = S.c.transfer_items.filter(x => x.transfer_id === id).map(x => {
+    const exps = (x.alloc||[]).map(a => { const b = rec('batches', a.b);
+      return NUM(a.q) + ' × ' + (b && b.expiry_date ? fmtD(b.expiry_date) : 'no expiry'); }).join('<br>');
+    return `<tr>
+    <td>${esc(nameOf('products', x.product_id))}</td><td class="r">${fmtQty(x.product_id, x.qty)}</td>
+    <td style="font-size:12px" class="mut">${exps||'—'}</td>
+    <td class="r mut">${AED(x.unit_cost)}</td><td class="r">${AED(x.qty*(+x.unit_cost||0))}</td></tr>`; }).join('');
   openModal('Transfer — ' + fmtD(t.date), `
     <div class="mnote">${esc(nameOf('locations',t.from_location_id))} → ${esc(nameOf('locations',t.to_location_id))}${t.notes?'<br>'+esc(t.notes):''}</div>
-    <div class="twrap"><table class="tbl" style="min-width:440px"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Value</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="twrap"><table class="tbl" style="min-width:520px"><thead><tr><th>Product</th><th class="r">Qty</th><th>Expiry breakdown</th><th class="r">Unit cost</th><th class="r">Value</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div style="height:10px"></div>`);
 }
 function delTransfer(id){
